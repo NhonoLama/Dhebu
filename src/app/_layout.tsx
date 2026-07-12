@@ -1,0 +1,69 @@
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from "@expo-google-fonts/poppins";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
+
+import { Colors } from "@/constants/theme";
+import { useLedgerStore } from "@/stores/useLedgerStore";
+import { currentMonthRange } from "@/utils/date";
+
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const [dbReady, setDbReady] = useState(false);
+  const init = useLedgerStore((s) => s.init);
+  const refresh = useLedgerStore((s) => s.refresh);
+
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await init();
+        const { start, end } = currentMonthRange();
+        await refresh(start, end);
+      } finally {
+        setDbReady(true);
+      }
+    })();
+  }, [init, refresh]);
+
+  useEffect(() => {
+    if (dbReady && fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [dbReady, fontsLoaded]);
+
+  if (!dbReady || !fontsLoaded) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: Colors.background,
+        }}
+      >
+        <ActivityIndicator color={Colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+    </Stack>
+  );
+}

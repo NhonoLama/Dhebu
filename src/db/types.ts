@@ -52,6 +52,23 @@ export interface PeriodSummary {
   balance: number;
 }
 
+export interface CalendarNote {
+  id: number;
+  date: string; // ISO date, e.g. 2026-08-13
+  note: string;
+  remind: boolean;
+  remind_time: string | null; // ISO datetime string
+  notification_id: string | null;
+  created_at: string;
+}
+
+export interface NewCalendarNoteInput {
+  date: string;
+  note: string;
+  remind: boolean;
+  remind_time?: string;
+}
+
 export interface CategoryBreakdown {
   category_id: number;
   category_name: string;

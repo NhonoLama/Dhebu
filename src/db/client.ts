@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -68,6 +68,22 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
       CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
       CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
       CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+    `);
+  }
+
+  if (version < 2) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS calendar_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        note TEXT NOT NULL,
+        remind INTEGER NOT NULL DEFAULT 0,
+        remind_time TEXT,
+        notification_id TEXT,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_calendar_notes_date ON calendar_notes(date);
     `);
   }
 

@@ -1,35 +1,14 @@
-import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
-import type { PeriodSummary, TransactionWithRelations } from "@/db/types";
-import {
-  getPeriodSummary,
-  getRecentTransactions,
-} from "@/repositories/transactions.repo";
+import { useLedgerStore } from "@/stores/useLedgerStore";
 import { formatCurrency } from "@/utils/currency";
-import { currentMonthRange, formatDisplayDate } from "@/utils/date";
+import { formatDisplayDate } from "@/utils/date";
 
 export default function DashboardScreen() {
-  const [summary, setSummary] = useState<PeriodSummary>({
-    income: 0,
-    expense: 0,
-    balance: 0,
-  });
-  const [recent, setRecent] = useState<TransactionWithRelations[]>([]);
-
-  useEffect(() => {
-    (async () => {
-      const { start, end } = currentMonthRange();
-      const [s, r] = await Promise.all([
-        getPeriodSummary(start, end),
-        getRecentTransactions(20),
-      ]);
-      setSummary(s);
-      setRecent(r);
-    })();
-  }, []);
+  const summary = useLedgerStore((s) => s.currentPeriodSummary);
+  const recent = useLedgerStore((s) => s.recentTransactions);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>

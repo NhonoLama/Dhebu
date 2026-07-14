@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     backgroundColor: Colors.background,
   },
-  scroll: { paddingBottom: 40 },
+  scroll: { paddingBottom: 40 + 64 },
   heading: {
     fontFamily: Fonts.bold,
     fontSize: 24,

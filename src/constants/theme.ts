@@ -36,3 +36,14 @@ export const Radii = {
 
 export const BottomTabInset = 24;
 export const MaxContentWidth = 560;
+
+/** Soft, colored drop shadow used on cards and the floating tab bar. */
+export const Shadows = {
+  soft: {
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6, // Android uses `elevation` instead of shadow* props
+  },
+};

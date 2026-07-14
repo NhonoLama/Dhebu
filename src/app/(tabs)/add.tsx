@@ -13,8 +13,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { TransactionType } from "@/db/types";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { getCategoryIcon } from "@/utils/category-icons";
 import { parseAmountInput } from "@/utils/currency";
 import { currentMonthRange, toIsoDate } from "@/utils/date";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function AddTransactionScreen() {
   const accounts = useLedgerStore((s) => s.accounts);
@@ -108,31 +110,50 @@ export default function AddTransactionScreen() {
         />
 
         <Text style={styles.label}>Category</Text>
-        <View style={styles.chipRow}>
-          {filteredCategories.map((cat) => (
-            <Pressable
-              key={cat.id}
-              onPress={() => setCategoryId(cat.id)}
-              style={[
-                styles.chip,
-                categoryId === cat.id && {
-                  backgroundColor: cat.color ?? Colors.primary,
-                },
-              ]}
-            >
-              <Text
+        <View style={styles.categoryGrid}>
+          {filteredCategories.map((cat) => {
+            const isSelected = categoryId === cat.id;
+            return (
+              <Pressable
+                key={cat.id}
+                onPress={() => setCategoryId(cat.id)}
                 style={[
-                  styles.chipText,
-                  categoryId === cat.id && {
-                    color: Colors.white,
-                    fontFamily: Fonts.semiBold,
-                  },
+                  styles.categoryCard,
+                  isSelected && styles.categoryCardSelected,
                 ]}
               >
-                {cat.name}
-              </Text>
-            </Pressable>
-          ))}
+                <View
+                  style={[
+                    styles.categoryIconWrap,
+                    {
+                      backgroundColor: isSelected
+                        ? Colors.white
+                        : (cat.color ?? Colors.primary) + "22",
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={getCategoryIcon(cat.icon)}
+                    size={20}
+                    color={
+                      isSelected
+                        ? (cat.color ?? Colors.primary)
+                        : (cat.color ?? Colors.primary)
+                    }
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.categoryLabel,
+                    isSelected && styles.categoryLabelSelected,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {cat.name}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
         <Text style={styles.label}>Note (optional)</Text>
@@ -195,7 +216,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     backgroundColor: Colors.background,
   },
-  scroll: { paddingBottom: 40 },
+  scroll: { paddingBottom: 40 + 64 },
   heading: {
     fontFamily: Fonts.bold,
     fontSize: 24,
@@ -232,16 +253,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: Colors.border,
   },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.two },
-  chip: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Radii.pill,
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.three },
+  categoryCard: {
+    width: 76,
+    alignItems: "center",
+    paddingVertical: Spacing.three,
+    borderRadius: Radii.medium,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    gap: Spacing.one,
   },
-  chipText: { fontFamily: Fonts.regular, color: Colors.ink },
+  categoryCardSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  categoryIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: Radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  categoryLabel: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: Colors.ink,
+    textAlign: "center",
+  },
+  categoryLabelSelected: {
+    color: Colors.white,
+    fontFamily: Fonts.semiBold,
+  },
   noteInput: {
     borderWidth: 1,
     borderColor: Colors.border,

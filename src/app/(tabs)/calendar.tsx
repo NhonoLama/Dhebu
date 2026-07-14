@@ -26,6 +26,7 @@ import { formatDisplayDate, toIsoDate } from "@/utils/date";
 import {
   cancelReminder,
   ensureNotificationPermission,
+  isExpoGo,
   scheduleReminder,
 } from "@/utils/notifications";
 
@@ -211,10 +212,15 @@ export default function CalendarScreen() {
         />
 
         <View style={styles.remindRow}>
-          <Text style={styles.remindLabel}>Remind me at 9 AM on this date</Text>
+          <Text style={styles.remindLabel}>
+            {isExpoGo
+              ? "Reminders need a development build (not available in Expo Go)"
+              : "Remind me at 9 AM on this date"}
+          </Text>
           <Switch
             value={remindMe}
             onValueChange={setRemindMe}
+            disabled={isExpoGo}
             trackColor={{ true: Colors.primary }}
           />
         </View>
@@ -243,7 +249,7 @@ function QuickShiftButton({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
+  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six + 64 },
   heading: {
     fontFamily: Fonts.bold,
     fontSize: 24,

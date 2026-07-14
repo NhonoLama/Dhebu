@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.three,
     marginBottom: Spacing.three,
   },
-  list: { gap: 2, paddingBottom: Spacing.six },
+  list: { gap: 2, paddingBottom: Spacing.six + 64 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -220,7 +220,7 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
+  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six + 64 },
   heading: {
     fontFamily: Fonts.bold,
     fontSize: 24,

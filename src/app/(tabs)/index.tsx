@@ -1,7 +1,8 @@
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { Colors, Fonts, Radii, Shadows, Spacing } from "@/constants/theme";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { formatCurrency } from "@/utils/currency";
 import { formatDisplayDate } from "@/utils/date";
@@ -12,7 +13,18 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.heading}>Dhebu</Text>
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.greeting}>Hi there 👋</Text>
+          <Text style={styles.subGreeting}>Here's your financial summary</Text>
+        </View>
+        <Pressable
+          style={styles.avatar}
+          onPress={() => router.push("/(tabs)/settings")}
+        >
+          <Text style={styles.avatarText}>D</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.summaryCard}>
         <SummaryRow
@@ -117,23 +129,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     backgroundColor: Colors.background,
   },
-  heading: {
-    fontFamily: Fonts.bold,
-    fontSize: 28,
-    color: Colors.primary,
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginTop: Spacing.three,
     marginBottom: Spacing.four,
   },
+  greeting: { fontFamily: Fonts.bold, fontSize: 20, color: Colors.ink },
+  subGreeting: {
+    fontFamily: Fonts.regular,
+    fontSize: 13,
+    color: Colors.muted,
+    marginTop: 2,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: Radii.pill,
+    backgroundColor: Colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontFamily: Fonts.bold, color: Colors.white, fontSize: 16 },
   summaryCard: {
     backgroundColor: Colors.surface,
     borderRadius: Radii.large,
     padding: Spacing.four,
     gap: Spacing.two,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...Shadows.soft,
   },
   summaryRow: {
     flexDirection: "row",
@@ -154,13 +178,15 @@ const styles = StyleSheet.create({
     marginTop: Spacing.five,
     marginBottom: Spacing.two,
   },
-  list: { gap: Spacing.one, paddingBottom: Spacing.six },
+  list: { gap: Spacing.one, paddingBottom: Spacing.six + 64 },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.three,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    padding: Spacing.three,
+    marginBottom: Spacing.two,
+    borderRadius: Radii.medium,
+    backgroundColor: Colors.surface,
+    ...Shadows.soft,
   },
   badge: {
     width: 32,

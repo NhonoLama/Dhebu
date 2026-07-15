@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +8,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { AnimatedPressable } from "@/components/animated-pressable";
 
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { TransactionType } from "@/db/types";
@@ -114,7 +115,7 @@ export default function AddTransactionScreen() {
           {filteredCategories.map((cat) => {
             const isSelected = categoryId === cat.id;
             return (
-              <Pressable
+              <AnimatedPressable
                 key={cat.id}
                 onPress={() => setCategoryId(cat.id)}
                 style={[
@@ -151,7 +152,7 @@ export default function AddTransactionScreen() {
                 >
                   {cat.name}
                 </Text>
-              </Pressable>
+              </AnimatedPressable>
             );
           })}
         </View>
@@ -165,7 +166,7 @@ export default function AddTransactionScreen() {
           placeholderTextColor={Colors.muted}
         />
 
-        <Pressable
+        <AnimatedPressable
           style={[styles.submitButton, submitting && { opacity: 0.6 }]}
           onPress={handleSubmit}
           disabled={submitting}
@@ -173,7 +174,7 @@ export default function AddTransactionScreen() {
           <Text style={styles.submitText}>
             {submitting ? "Saving…" : "Save Transaction"}
           </Text>
-        </Pressable>
+        </AnimatedPressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -191,7 +192,7 @@ function TypeToggleButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <AnimatedPressable
       onPress={onPress}
       style={[
         styles.toggleButton,
@@ -206,7 +207,7 @@ function TypeToggleButton({
       >
         {label}
       </Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

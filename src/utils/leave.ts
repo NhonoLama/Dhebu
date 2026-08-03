@@ -23,9 +23,9 @@ export function calculateAccruedDays(
 export function calculateBalance(
   startDate: string,
   daysPerMonth: number,
-  daysTaken: number,
+  totalDaysTaken: number, // sum of amounts (0.5/1 per day), not a row count
   asOfDate: Date = new Date(),
 ): number {
   const accrued = calculateAccruedDays(startDate, daysPerMonth, asOfDate);
-  return accrued - daysTaken;
+  return accrued - totalDaysTaken;
 }

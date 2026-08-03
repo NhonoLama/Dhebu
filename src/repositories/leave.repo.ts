@@ -10,6 +10,7 @@ export interface LeaveSettings {
 export interface LeaveDay {
   id: number;
   date: string;
+  amount: number; // 1 = full day, 0.5 = half day
   created_at: string;
 }
 
@@ -61,11 +62,14 @@ export async function isLeaveDay(date: string): Promise<boolean> {
 }
 
 /** Marks a date as leave taken. Throws if that date is already marked. */
-export async function markLeaveDay(date: string): Promise<void> {
+export async function markLeaveDay(
+  date: string,
+  amount: 1 | 0.5 = 1,
+): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    "INSERT INTO leave_days (date, created_at) VALUES (?, ?);",
-    [date, new Date().toISOString()],
+    "INSERT INTO leave_days (date, amount, created_at) VALUES (?, ?, ?);",
+    [date, amount, new Date().toISOString()],
   );
 }
 
@@ -77,10 +81,10 @@ export async function unmarkLeaveDay(date: string): Promise<void> {
 
 export async function countLeaveDaysTaken(): Promise<number> {
   const db = await getDb();
-  const row = await db.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) as count FROM leave_days;",
+  const row = await db.getFirstAsync<{ total: number }>(
+    "SELECT COALESCE(SUM(amount), 0) as total FROM leave_days;",
   );
-  return row?.count ?? 0;
+  return row?.total ?? 0;
 }
 
 /**

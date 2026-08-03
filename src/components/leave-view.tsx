@@ -113,11 +113,13 @@ export function LeaveView() {
   }
 
   async function handleToggleDate(iso: string) {
-    const alreadyTaken = leaveDays.some((d) => d.date === iso);
-    if (alreadyTaken) {
+    const existing = leaveDays.find((d) => d.date === iso);
+    if (existing) {
       Alert.alert(
         "Remove leave?",
-        `Unmark ${formatDisplayDate(iso)} as leave taken?`,
+        `Unmark ${formatDisplayDate(iso)} as leave (${
+          existing.amount === 0.5 ? "half day" : "full day"
+        })?`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -131,20 +133,23 @@ export function LeaveView() {
         ],
       );
     } else {
-      Alert.alert(
-        "Mark as leave?",
-        `Mark ${formatDisplayDate(iso)} as a leave day?`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Mark",
-            onPress: async () => {
-              await markLeaveDay(iso);
-              load();
-            },
+      Alert.alert("Mark as leave?", `Mark ${formatDisplayDate(iso)} as:`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Half Day",
+          onPress: async () => {
+            await markLeaveDay(iso, 0.5);
+            load();
           },
-        ],
-      );
+        },
+        {
+          text: "Full Day",
+          onPress: async () => {
+            await markLeaveDay(iso, 1);
+            load();
+          },
+        },
+      ]);
     }
   }
 
@@ -155,12 +160,9 @@ export function LeaveView() {
   }
 
   const takenDates = new Set(leaveDays.map((d) => d.date));
+  const totalTaken = leaveDays.reduce((sum, d) => sum + d.amount, 0);
   const balance = settings
-    ? calculateBalance(
-        settings.start_date,
-        settings.days_per_month,
-        leaveDays.length,
-      )
+    ? calculateBalance(settings.start_date, settings.days_per_month, totalTaken)
     : 0;
   const accrued = settings
     ? calculateAccruedDays(settings.start_date, settings.days_per_month)
@@ -187,7 +189,7 @@ export function LeaveView() {
         <Text style={styles.balanceLabel}>Leave Balance</Text>
         <Text style={styles.balanceValue}>{balance.toFixed(1)} days</Text>
         <Text style={styles.balanceSub}>
-          {accrued.toFixed(1)} accrued · {leaveDays.length} taken
+          {accrued.toFixed(1)} accrued · {totalTaken} taken
         </Text>
         {settings && (
           <Text style={styles.balanceSince}>
@@ -348,7 +350,10 @@ export function LeaveView() {
           style={styles.historyRow}
           onLongPress={() => handleToggleDate(d.date)}
         >
-          <Text style={styles.historyText}>{formatDisplayDate(d.date)}</Text>
+          <Text style={styles.historyText}>
+            {formatDisplayDate(d.date)} ·{" "}
+            {d.amount === 0.5 ? "Half Day" : "Full Day"}
+          </Text>
           <Text style={styles.historyHint}>long-press to remove</Text>
         </Pressable>
       ))}

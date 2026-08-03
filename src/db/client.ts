@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -106,7 +106,13 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
     `);
   }
 
-  // Future migrations: \`if (version < 4) { ... }\` etc.
+  if (version < 4) {
+    await db.execAsync(`
+      ALTER TABLE leave_days ADD COLUMN amount REAL NOT NULL DEFAULT 1;
+    `);
+  }
+
+  // Future migrations: \`if (version < 5) { ... }\` etc.
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_VERSION};`);
 }

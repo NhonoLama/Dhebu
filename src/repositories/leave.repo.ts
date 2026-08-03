@@ -82,3 +82,26 @@ export async function countLeaveDaysTaken(): Promise<number> {
   );
   return row?.count ?? 0;
 }
+
+/**
+ * Sets (or updates) the accrual start date independently of the rate.
+ * If no settings row exists yet, creates one with a placeholder rate of 0 —
+ * the user is expected to also set a rate via setLeaveRate.
+ */
+export async function setLeaveStartDate(startDate: string): Promise<void> {
+  const db = await getDb();
+  const existing = await getLeaveSettings();
+  if (existing) {
+    await db.runAsync(
+      "UPDATE leave_settings SET start_date = ? WHERE id = 1;",
+      [startDate],
+    );
+  } else {
+    const now = new Date().toISOString();
+    await db.runAsync(
+      `INSERT INTO leave_settings (id, days_per_month, start_date, created_at)
+       VALUES (1, 0, ?, ?);`,
+      [startDate, now],
+    );
+  }
+}

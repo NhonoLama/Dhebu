@@ -12,6 +12,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { Colors } from "@/constants/theme";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { ThemeProvider } from "@/theme/theme-context";
 import { currentMonthRange } from "@/utils/date";
 
 SplashScreen.preventAutoHideAsync();
@@ -62,8 +63,10 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-    </Stack>
+    <ThemeProvider>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+      </Stack>
+    </ThemeProvider>
   );
 }

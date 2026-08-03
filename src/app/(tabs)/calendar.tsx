@@ -162,7 +162,7 @@ export default function CalendarScreen() {
                 activeTab === "notes" && styles.tabTextActive,
               ]}
             >
-              Calendar
+              Remainder
             </Text>
           </Pressable>
           <Pressable

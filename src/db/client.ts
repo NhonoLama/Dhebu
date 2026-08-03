@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -87,7 +87,26 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
     `);
   }
 
-  // Future migrations: `if (version < 2) { ... }` etc.
+  if (version < 3) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS leave_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        days_per_month REAL NOT NULL,
+        start_date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS leave_days (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_leave_days_date ON leave_days(date);
+    `);
+  }
+
+  // Future migrations: \`if (version < 4) { ... }\` etc.
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_VERSION};`);
 }

@@ -1,4 +1,4 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
 
@@ -36,6 +36,12 @@ export function CalendarGrid({
     }),
   ];
 
+  // Pad the end so the grid always completes full rows of 7 —
+  // avoids uneven/broken layout on the last partial week.
+  while (cells.length % 7 !== 0) {
+    cells.push(null);
+  }
+
   return (
     <View>
       <View style={styles.weekdayRow}>
@@ -45,17 +51,14 @@ export function CalendarGrid({
           </Text>
         ))}
       </View>
-      <FlatList
-        data={cells}
-        numColumns={7}
-        keyExtractor={(_, i) => String(i)}
-        scrollEnabled={false}
-        renderItem={({ item }) => {
-          if (!item) return <View style={styles.cell} />;
+      <View style={styles.grid}>
+        {cells.map((item, i) => {
+          if (!item) return <View key={i} style={styles.cell} />;
           const isSelected = item.iso === selectedDate;
           const hasNote = datesWithNotes.has(item.iso);
           return (
             <Pressable
+              key={i}
               style={[styles.cell, isSelected && styles.cellSelected]}
               onPress={() => onSelectDate(item.iso)}
             >
@@ -69,8 +72,8 @@ export function CalendarGrid({
               )}
             </Pressable>
           );
-        }}
-      />
+        })}
+      </View>
     </View>
   );
 }
@@ -78,18 +81,21 @@ export function CalendarGrid({
 const styles = StyleSheet.create({
   weekdayRow: { flexDirection: "row", marginBottom: Spacing.two },
   weekdayLabel: {
-    flex: 1,
+    width: `${100 / 7}%`,
     textAlign: "center",
     fontFamily: Fonts.semiBold,
     fontSize: 12,
     color: Colors.muted,
   },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
   cell: {
-    flex: 1,
+    width: `${100 / 7}%`,
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
-    margin: 2,
     borderRadius: Radii.medium,
   },
   cellSelected: { backgroundColor: Colors.primary },

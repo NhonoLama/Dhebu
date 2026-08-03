@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { useEffect } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -49,11 +49,6 @@ export function FloatingTabBar({
           return (
             <Pressable key={route.key} onPress={handlePress} style={styles.tab}>
               <AnimatedIconWrap isFocused={isFocused} iconName={iconName} />
-              {isFocused && (
-                <Text style={styles.label} numberOfLines={1}>
-                  {String(options.title ?? route.name)}
-                </Text>
-              )}
             </Pressable>
           );
         })}

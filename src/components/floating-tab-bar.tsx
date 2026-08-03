@@ -1,6 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors, Fonts, Radii, Shadows, Spacing } from "@/constants/theme";
@@ -42,15 +48,7 @@ export function FloatingTabBar({
 
           return (
             <Pressable key={route.key} onPress={handlePress} style={styles.tab}>
-              <View
-                style={[styles.iconWrap, isFocused && styles.iconWrapActive]}
-              >
-                <Ionicons
-                  name={iconName}
-                  size={20}
-                  color={isFocused ? Colors.white : Colors.muted}
-                />
-              </View>
+              <AnimatedIconWrap isFocused={isFocused} iconName={iconName} />
               {isFocused && (
                 <Text style={styles.label} numberOfLines={1}>
                   {String(options.title ?? route.name)}
@@ -61,6 +59,43 @@ export function FloatingTabBar({
         })}
       </View>
     </View>
+  );
+}
+
+function AnimatedIconWrap({
+  isFocused,
+  iconName,
+}: {
+  isFocused: boolean;
+  iconName: keyof typeof Ionicons.glyphMap;
+}) {
+  const scale = useSharedValue(isFocused ? 1 : 0.9);
+
+  useEffect(() => {
+    scale.value = withSpring(isFocused ? 1.1 : 0.9, {
+      damping: 10,
+      stiffness: 200,
+    });
+  }, [isFocused, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.iconWrap,
+        isFocused && styles.iconWrapActive,
+        animatedStyle,
+      ]}
+    >
+      <Ionicons
+        name={iconName}
+        size={20}
+        color={isFocused ? Colors.white : Colors.muted}
+      />
+    </Animated.View>
   );
 }
 

@@ -1,15 +1,9 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
-import {
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AnimatedPressable } from "@/components/animated-pressable";
 import { Colors, Fonts, Spacing } from "@/constants/theme";
 import type { TransactionWithRelations } from "@/db/types";
 import { getTransactionsByDateRange } from "@/repositories/transactions.repo";
@@ -30,11 +24,9 @@ export default function TransactionsScreen() {
     setLoading(false);
   }
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, []),
-  );
+  useEffect(() => {
+    load();
+  }, []);
 
   function confirmDelete(id: number) {
     Alert.alert("Delete transaction?", "This cannot be undone.", [
@@ -60,30 +52,32 @@ export default function TransactionsScreen() {
         onRefresh={load}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.row}
-            onLongPress={() => confirmDelete(item.id)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{item.category_name}</Text>
-              <Text style={styles.rowSub}>
-                {formatDisplayDate(item.date)} · {item.account_name}
-                {item.note ? ` · ${item.note}` : ""}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.amount,
-                {
-                  color:
-                    item.type === "income" ? Colors.income : Colors.expense,
-                },
-              ]}
+          <Animated.View exiting={FadeOut.duration(250)}>
+            <AnimatedPressable
+              style={styles.row}
+              onLongPress={() => confirmDelete(item.id)}
             >
-              {item.type === "income" ? "+" : "-"}
-              {formatCurrency(item.amount)}
-            </Text>
-          </Pressable>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>{item.category_name}</Text>
+                <Text style={styles.rowSub}>
+                  {formatDisplayDate(item.date)} · {item.account_name}
+                  {item.note ? ` · ${item.note}` : ""}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.amount,
+                  {
+                    color:
+                      item.type === "income" ? Colors.income : Colors.expense,
+                  },
+                ]}
+              >
+                {item.type === "income" ? "+" : "-"}
+                {formatCurrency(item.amount)}
+              </Text>
+            </AnimatedPressable>
+          </Animated.View>
         )}
         ListEmptyComponent={
           !loading ? (

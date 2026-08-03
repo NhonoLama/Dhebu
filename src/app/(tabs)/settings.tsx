@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -11,17 +11,27 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { RenameModal } from "@/components/rename-modal";
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { Account, Category } from "@/db/types";
 import { createAccount } from "@/repositories/accounts.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { ThemeMode, useTheme } from "@/theme/theme-context";
 
 type EditTarget =
   | { kind: "account"; item: Account }
   | { kind: "category"; item: Category }
   | null;
 
+const THEME_OPTIONS: { mode: ThemeMode; label: string }[] = [
+  { mode: "system", label: "System" },
+  { mode: "light", label: "Light" },
+  { mode: "dark", label: "Dark" },
+];
+
 export default function SettingsScreen() {
+  const { colors, mode, setMode } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const accounts = useLedgerStore((s) => s.accounts);
   const categories = useLedgerStore((s) => s.categories);
   const init = useLedgerStore((s) => s.init);
@@ -104,6 +114,29 @@ export default function SettingsScreen() {
       >
         <Text style={styles.heading}>Settings</Text>
 
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.themeToggleRow}>
+          {THEME_OPTIONS.map((opt) => {
+            const isActive = mode === opt.mode;
+            return (
+              <Pressable
+                key={opt.mode}
+                onPress={() => setMode(opt.mode)}
+                style={[styles.themeChip, isActive && styles.themeChipActive]}
+              >
+                <Text
+                  style={[
+                    styles.themeChipText,
+                    isActive && styles.themeChipTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         <Text style={styles.sectionTitle}>Accounts</Text>
         {accounts.map((a) => (
           <View key={a.id} style={styles.row}>
@@ -121,7 +154,7 @@ export default function SettingsScreen() {
               onPress={() => handleDeleteAccount(a)}
               style={styles.iconBtn}
             >
-              <Text style={[styles.iconBtnText, { color: Colors.expense }]}>
+              <Text style={[styles.iconBtnText, { color: colors.expense }]}>
                 Delete
               </Text>
             </Pressable>
@@ -131,7 +164,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             placeholder="New account name"
-            placeholderTextColor={Colors.muted}
+            placeholderTextColor={colors.muted}
             value={newAccountName}
             onChangeText={setNewAccountName}
           />
@@ -157,7 +190,7 @@ export default function SettingsScreen() {
               onPress={() => handleDeleteCategory(c)}
               style={styles.iconBtn}
             >
-              <Text style={[styles.iconBtnText, { color: Colors.expense }]}>
+              <Text style={[styles.iconBtnText, { color: colors.expense }]}>
                 Delete
               </Text>
             </Pressable>
@@ -173,15 +206,15 @@ export default function SettingsScreen() {
                 styles.typeChip,
                 newCategoryType === t && {
                   backgroundColor:
-                    t === "income" ? Colors.income : Colors.expense,
+                    t === "income" ? colors.income : colors.expense,
                 },
               ]}
             >
               <Text
                 style={
                   newCategoryType === t
-                    ? { color: Colors.white, fontFamily: Fonts.semiBold }
-                    : { color: Colors.muted }
+                    ? { color: colors.white, fontFamily: Fonts.semiBold }
+                    : { color: colors.muted }
                 }
               >
                 {t === "income" ? "Income" : "Expense"}
@@ -193,7 +226,7 @@ export default function SettingsScreen() {
           <TextInput
             style={styles.input}
             placeholder="New category name"
-            placeholderTextColor={Colors.muted}
+            placeholderTextColor={colors.muted}
             value={newCategoryName}
             onChangeText={setNewCategoryName}
           />
@@ -218,70 +251,105 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six + 64 },
-  heading: {
-    fontFamily: Fonts.bold,
-    fontSize: 24,
-    color: Colors.ink,
-    marginTop: Spacing.three,
-    marginBottom: Spacing.four,
-  },
-  sectionTitle: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: Colors.primary,
-    marginTop: Spacing.five,
-    marginBottom: Spacing.two,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.two,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-    gap: Spacing.two,
-  },
-  rowLabel: { fontFamily: Fonts.medium, color: Colors.ink },
-  rowSub: { fontFamily: Fonts.regular, fontSize: 12, color: Colors.muted },
-  iconBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
-  iconBtnText: {
-    fontFamily: Fonts.medium,
-    fontSize: 13,
-    color: Colors.primary,
-  },
-  addRow: { flexDirection: "row", gap: Spacing.two, marginTop: Spacing.three },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    fontFamily: Fonts.regular,
-    color: Colors.ink,
-    backgroundColor: Colors.surface,
-  },
-  addButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.medium,
-    paddingHorizontal: Spacing.four,
-    justifyContent: "center",
-  },
-  addButtonText: { color: Colors.white, fontFamily: Fonts.semiBold },
-  typeToggleRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
-    marginTop: Spacing.three,
-  },
-  typeChip: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Radii.pill,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    scroll: {
+      paddingHorizontal: Spacing.four,
+      paddingBottom: Spacing.six + 64,
+    },
+    heading: {
+      fontFamily: Fonts.bold,
+      fontSize: 24,
+      color: colors.ink,
+      marginTop: Spacing.three,
+      marginBottom: Spacing.four,
+    },
+    sectionTitle: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 13,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      color: colors.primary,
+      marginTop: Spacing.five,
+      marginBottom: Spacing.two,
+    },
+    themeToggleRow: {
+      flexDirection: "row",
+      gap: Spacing.two,
+    },
+    themeChip: {
+      flex: 1,
+      paddingVertical: Spacing.two,
+      borderRadius: Radii.pill,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+    },
+    themeChipActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    themeChipText: {
+      fontFamily: Fonts.medium,
+      fontSize: 13,
+      color: colors.muted,
+    },
+    themeChipTextActive: {
+      color: colors.white,
+      fontFamily: Fonts.semiBold,
+    },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: Spacing.two,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      gap: Spacing.two,
+    },
+    rowLabel: { fontFamily: Fonts.medium, color: colors.ink },
+    rowSub: { fontFamily: Fonts.regular, fontSize: 12, color: colors.muted },
+    iconBtn: { paddingHorizontal: Spacing.two, paddingVertical: Spacing.one },
+    iconBtnText: {
+      fontFamily: Fonts.medium,
+      fontSize: 13,
+      color: colors.primary,
+    },
+    addRow: {
+      flexDirection: "row",
+      gap: Spacing.two,
+      marginTop: Spacing.three,
+    },
+    input: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      fontFamily: Fonts.regular,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+    },
+    addButton: {
+      backgroundColor: colors.primary,
+      borderRadius: Radii.medium,
+      paddingHorizontal: Spacing.four,
+      justifyContent: "center",
+    },
+    addButtonText: { color: colors.white, fontFamily: Fonts.semiBold },
+    typeToggleRow: {
+      flexDirection: "row",
+      gap: Spacing.two,
+      marginTop: Spacing.three,
+    },
+    typeChip: {
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+      borderRadius: Radii.pill,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+  });
+}

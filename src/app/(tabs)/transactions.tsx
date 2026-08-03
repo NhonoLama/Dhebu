@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AnimatedPressable } from "@/components/animated-pressable";
-import { Colors, Fonts, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Spacing } from "@/constants/theme";
 import type { TransactionWithRelations } from "@/db/types";
 import { getTransactionsByDateRange } from "@/repositories/transactions.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
 import { currentMonthRange, formatDisplayDate } from "@/utils/date";
 
 export default function TransactionsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const removeTransaction = useLedgerStore((s) => s.removeTransaction);
   const [items, setItems] = useState<TransactionWithRelations[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +73,7 @@ export default function TransactionsScreen() {
                   styles.amount,
                   {
                     color:
-                      item.type === "income" ? Colors.income : Colors.expense,
+                      item.type === "income" ? colors.income : colors.expense,
                   },
                 ]}
               >
@@ -89,40 +93,42 @@ export default function TransactionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    backgroundColor: Colors.background,
-  },
-  heading: {
-    fontFamily: Fonts.bold,
-    fontSize: 24,
-    color: Colors.ink,
-    marginTop: Spacing.three,
-    marginBottom: Spacing.three,
-  },
-  list: { gap: 2, paddingBottom: Spacing.six + 64 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: Spacing.three,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  rowTitle: { fontFamily: Fonts.medium, color: Colors.ink },
-  rowSub: {
-    fontFamily: Fonts.regular,
-    fontSize: 12,
-    color: Colors.muted,
-    marginTop: 2,
-  },
-  amount: { fontFamily: Fonts.semiBold, fontSize: 15 },
-  empty: {
-    textAlign: "center",
-    marginTop: Spacing.five,
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-  },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: Spacing.four,
+      backgroundColor: colors.background,
+    },
+    heading: {
+      fontFamily: Fonts.bold,
+      fontSize: 24,
+      color: colors.ink,
+      marginTop: Spacing.three,
+      marginBottom: Spacing.three,
+    },
+    list: { gap: 2, paddingBottom: Spacing.six + 64 },
+    row: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: Spacing.three,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    rowTitle: { fontFamily: Fonts.medium, color: colors.ink },
+    rowSub: {
+      fontFamily: Fonts.regular,
+      fontSize: 12,
+      color: colors.muted,
+      marginTop: 2,
+    },
+    amount: { fontFamily: Fonts.semiBold, fontSize: 15 },
+    empty: {
+      textAlign: "center",
+      marginTop: Spacing.five,
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+    },
+  });
+}

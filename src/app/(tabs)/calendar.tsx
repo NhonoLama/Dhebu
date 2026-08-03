@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Pressable,
@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CalendarGrid } from "@/components/calendar-grid";
 import { LeaveView } from "@/components/leave-view";
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { CalendarNote } from "@/db/types";
 import {
   attachNotificationId,
@@ -23,6 +23,7 @@ import {
   getNotesForDate,
   getNotesForMonth,
 } from "@/repositories/calendar-notes.repo";
+import { useTheme } from "@/theme/theme-context";
 import { formatDisplayDate, toIsoDate } from "@/utils/date";
 import {
   cancelReminder,
@@ -38,6 +39,8 @@ function pad(n: number): string {
 }
 
 export default function CalendarScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [activeTab, setActiveTab] = useState<CalendarTab>("notes");
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -224,14 +227,17 @@ export default function CalendarScreen() {
             <QuickShiftButton
               label="+1 Week"
               onPress={() => shiftSelectedDate(7)}
+              styles={styles}
             />
             <QuickShiftButton
               label="+1 Month"
               onPress={() => shiftSelectedDate(30)}
+              styles={styles}
             />
             <QuickShiftButton
               label="+1 Year"
               onPress={() => shiftSelectedDate(365)}
+              styles={styles}
             />
           </View>
 
@@ -254,7 +260,7 @@ export default function CalendarScreen() {
           <TextInput
             style={styles.input}
             placeholder="Add a note for this date"
-            placeholderTextColor={Colors.muted}
+            placeholderTextColor={colors.muted}
             value={noteText}
             onChangeText={setNoteText}
           />
@@ -269,7 +275,7 @@ export default function CalendarScreen() {
               value={remindMe}
               onValueChange={setRemindMe}
               disabled={isExpoGo}
-              trackColor={{ true: Colors.primary }}
+              trackColor={{ true: colors.primary }}
             />
           </View>
 
@@ -285,9 +291,11 @@ export default function CalendarScreen() {
 function QuickShiftButton({
   label,
   onPress,
+  styles,
 }: {
   label: string;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
 }) {
   return (
     <Pressable style={styles.quickShiftChip} onPress={onPress}>
@@ -296,115 +304,117 @@ function QuickShiftButton({
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  topArea: { paddingHorizontal: Spacing.four },
-  scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
-  leaveWrapper: { flex: 1, paddingHorizontal: Spacing.four },
-  heading: {
-    fontFamily: Fonts.bold,
-    fontSize: 24,
-    color: Colors.ink,
-    marginTop: Spacing.three,
-    marginBottom: Spacing.three,
-  },
-  tabToggle: {
-    flexDirection: "row",
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.pill,
-    padding: 4,
-    gap: 4,
-    marginBottom: Spacing.four,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: Spacing.two,
-    borderRadius: Radii.pill,
-    alignItems: "center",
-  },
-  tabButtonActive: { backgroundColor: Colors.primary },
-  tabText: { fontFamily: Fonts.medium, fontSize: 13, color: Colors.muted },
-  tabTextActive: { color: Colors.white, fontFamily: Fonts.semiBold },
-  monthNav: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.three,
-  },
-  navArrow: {
-    fontSize: 28,
-    color: Colors.primary,
-    paddingHorizontal: Spacing.three,
-  },
-  monthLabel: { fontFamily: Fonts.semiBold, fontSize: 16, color: Colors.ink },
-  sectionTitle: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 14,
-    color: Colors.muted,
-    marginTop: Spacing.five,
-    marginBottom: Spacing.two,
-  },
-  quickShiftRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
-    marginBottom: Spacing.three,
-  },
-  quickShiftChip: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radii.pill,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  quickShiftText: {
-    fontFamily: Fonts.medium,
-    fontSize: 12,
-    color: Colors.primary,
-  },
-  noteRow: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    marginBottom: Spacing.two,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  noteText: { fontFamily: Fonts.regular, color: Colors.ink },
-  reminderTag: {
-    fontFamily: Fonts.medium,
-    fontSize: 12,
-    color: Colors.primary,
-    marginTop: 4,
-  },
-  empty: {
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-    marginBottom: Spacing.three,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    fontFamily: Fonts.regular,
-    color: Colors.ink,
-    backgroundColor: Colors.surface,
-    marginTop: Spacing.three,
-  },
-  remindRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: Spacing.three,
-  },
-  remindLabel: { fontFamily: Fonts.regular, color: Colors.ink, flex: 1 },
-  addButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.medium,
-    paddingVertical: Spacing.three,
-    alignItems: "center",
-    marginTop: Spacing.four,
-  },
-  addButtonText: { color: Colors.white, fontFamily: Fonts.semiBold },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    topArea: { paddingHorizontal: Spacing.four },
+    scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
+    leaveWrapper: { flex: 1, paddingHorizontal: Spacing.four },
+    heading: {
+      fontFamily: Fonts.bold,
+      fontSize: 24,
+      color: colors.ink,
+      marginTop: Spacing.three,
+      marginBottom: Spacing.three,
+    },
+    tabToggle: {
+      flexDirection: "row",
+      backgroundColor: colors.surface,
+      borderRadius: Radii.pill,
+      padding: 4,
+      gap: 4,
+      marginBottom: Spacing.four,
+    },
+    tabButton: {
+      flex: 1,
+      paddingVertical: Spacing.two,
+      borderRadius: Radii.pill,
+      alignItems: "center",
+    },
+    tabButtonActive: { backgroundColor: colors.primary },
+    tabText: { fontFamily: Fonts.medium, fontSize: 13, color: colors.muted },
+    tabTextActive: { color: colors.white, fontFamily: Fonts.semiBold },
+    monthNav: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: Spacing.three,
+    },
+    navArrow: {
+      fontSize: 28,
+      color: colors.primary,
+      paddingHorizontal: Spacing.three,
+    },
+    monthLabel: { fontFamily: Fonts.semiBold, fontSize: 16, color: colors.ink },
+    sectionTitle: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 14,
+      color: colors.muted,
+      marginTop: Spacing.five,
+      marginBottom: Spacing.two,
+    },
+    quickShiftRow: {
+      flexDirection: "row",
+      gap: Spacing.two,
+      marginBottom: Spacing.three,
+    },
+    quickShiftChip: {
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.two,
+      borderRadius: Radii.pill,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    quickShiftText: {
+      fontFamily: Fonts.medium,
+      fontSize: 12,
+      color: colors.primary,
+    },
+    noteRow: {
+      backgroundColor: colors.surface,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      marginBottom: Spacing.two,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    noteText: { fontFamily: Fonts.regular, color: colors.ink },
+    reminderTag: {
+      fontFamily: Fonts.medium,
+      fontSize: 12,
+      color: colors.primary,
+      marginTop: 4,
+    },
+    empty: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      marginBottom: Spacing.three,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      fontFamily: Fonts.regular,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+      marginTop: Spacing.three,
+    },
+    remindRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: Spacing.three,
+    },
+    remindLabel: { fontFamily: Fonts.regular, color: colors.ink, flex: 1 },
+    addButton: {
+      backgroundColor: colors.primary,
+      borderRadius: Radii.medium,
+      paddingVertical: Spacing.three,
+      alignItems: "center",
+      marginTop: Spacing.four,
+    },
+    addButtonText: { color: colors.white, fontFamily: Fonts.semiBold },
+  });
+}

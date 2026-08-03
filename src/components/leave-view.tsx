@@ -1,5 +1,5 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { LeaveDay, LeaveSettings } from "@/repositories/leave.repo";
 import {
   getAllLeaveDays,
@@ -21,6 +21,7 @@ import {
   setLeaveStartDate,
   unmarkLeaveDay,
 } from "@/repositories/leave.repo";
+import { useTheme } from "@/theme/theme-context";
 import { formatDisplayDate } from "@/utils/date";
 import { calculateAccruedDays, calculateBalance } from "@/utils/leave";
 
@@ -46,6 +47,8 @@ function pad(n: number): string {
 }
 
 export function LeaveView() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -293,7 +296,7 @@ export function LeaveView() {
           value={rateInput}
           onChangeText={setRateInput}
           placeholder="e.g. 2"
-          placeholderTextColor={Colors.muted}
+          placeholderTextColor={colors.muted}
           keyboardType="decimal-pad"
         />
         <Text style={styles.rateSuffix}>days / month</Text>
@@ -353,176 +356,190 @@ export function LeaveView() {
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: { paddingBottom: Spacing.six },
-  balanceCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.large,
-    padding: Spacing.four,
-    alignItems: "center",
-    marginBottom: Spacing.four,
-  },
-  balanceLabel: { fontFamily: Fonts.medium, color: Colors.muted, fontSize: 13 },
-  balanceValue: {
-    fontFamily: Fonts.bold,
-    color: LEAVE_COLOR,
-    fontSize: 32,
-    marginTop: 4,
-  },
-  balanceSub: {
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  balanceSince: {
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  setupNotice: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    marginBottom: Spacing.four,
-  },
-  setupText: { fontFamily: Fonts.regular, color: Colors.muted, fontSize: 13 },
-  sectionTitle: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: Colors.primary,
-    marginTop: Spacing.four,
-    marginBottom: Spacing.two,
-  },
-  rateRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two },
-  rateInput: {
-    width: 70,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radii.medium,
-    padding: Spacing.two,
-    fontFamily: Fonts.medium,
-    color: Colors.ink,
-    backgroundColor: Colors.surface,
-  },
-  rateSuffix: {
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-    fontSize: 13,
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.medium,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-  },
-  saveButtonText: { color: Colors.white, fontFamily: Fonts.semiBold },
-  chooseButton: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    backgroundColor: Colors.surface,
-  },
-  chooseButtonText: { fontFamily: Fonts.medium, color: Colors.ink },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: Spacing.four,
-  },
-  modalCard: {
-    width: "100%",
-    backgroundColor: Colors.background,
-    borderRadius: Radii.large,
-    padding: Spacing.four,
-  },
-  modalTitle: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 16,
-    color: Colors.ink,
-    marginBottom: Spacing.three,
-    textAlign: "center",
-  },
-  yearNav: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.three,
-    paddingHorizontal: Spacing.four,
-  },
-  monthGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
-    marginBottom: Spacing.four,
-  },
-  monthChip: {
-    width: "30%",
-    paddingVertical: Spacing.two,
-    borderRadius: Radii.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-  },
-  monthChipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  monthChipText: { fontFamily: Fonts.medium, color: Colors.ink, fontSize: 13 },
-  monthChipTextSelected: { color: Colors.white, fontFamily: Fonts.semiBold },
-  modalButtonRow: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: Spacing.three,
-  },
-  modalCancelButton: {
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    justifyContent: "center",
-  },
-  modalCancelText: { fontFamily: Fonts.medium, color: Colors.muted },
-  monthNav: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: Spacing.four,
-    marginBottom: Spacing.two,
-  },
-  navArrow: {
-    fontSize: 24,
-    color: Colors.primary,
-    paddingHorizontal: Spacing.three,
-  },
-  monthLabel: { fontFamily: Fonts.semiBold, fontSize: 15, color: Colors.ink },
-  grid: { flexDirection: "row", flexWrap: "wrap" },
-  cell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: Radii.medium,
-  },
-  cellTaken: { backgroundColor: LEAVE_COLOR },
-  dayText: { fontFamily: Fonts.regular, color: Colors.ink, fontSize: 14 },
-  dayTextTaken: { color: Colors.white, fontFamily: Fonts.semiBold },
-  empty: {
-    fontFamily: Fonts.regular,
-    color: Colors.muted,
-    marginBottom: Spacing.three,
-  },
-  historyRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: Spacing.two,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
-  },
-  historyText: { fontFamily: Fonts.medium, color: Colors.ink },
-  historyHint: { fontFamily: Fonts.regular, color: Colors.muted, fontSize: 11 },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    scroll: { paddingBottom: Spacing.six },
+    balanceCard: {
+      backgroundColor: colors.surface,
+      borderRadius: Radii.large,
+      padding: Spacing.four,
+      alignItems: "center",
+      marginBottom: Spacing.four,
+    },
+    balanceLabel: {
+      fontFamily: Fonts.medium,
+      color: colors.muted,
+      fontSize: 13,
+    },
+    balanceValue: {
+      fontFamily: Fonts.bold,
+      color: LEAVE_COLOR,
+      fontSize: 32,
+      marginTop: 4,
+    },
+    balanceSub: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      fontSize: 12,
+      marginTop: 4,
+    },
+    balanceSince: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      fontSize: 11,
+      marginTop: 2,
+    },
+    setupNotice: {
+      backgroundColor: colors.surface,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      marginBottom: Spacing.four,
+    },
+    setupText: { fontFamily: Fonts.regular, color: colors.muted, fontSize: 13 },
+    sectionTitle: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 13,
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      color: colors.primary,
+      marginTop: Spacing.four,
+      marginBottom: Spacing.two,
+    },
+    rateRow: { flexDirection: "row", alignItems: "center", gap: Spacing.two },
+    rateInput: {
+      width: 70,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.two,
+      fontFamily: Fonts.medium,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+    },
+    rateSuffix: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      fontSize: 13,
+      flex: 1,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+      borderRadius: Radii.medium,
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+    },
+    saveButtonText: { color: colors.white, fontFamily: Fonts.semiBold },
+    monthNav: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: Spacing.four,
+      marginBottom: Spacing.two,
+    },
+    navArrow: {
+      fontSize: 24,
+      color: colors.primary,
+      paddingHorizontal: Spacing.three,
+    },
+    monthLabel: { fontFamily: Fonts.semiBold, fontSize: 15, color: colors.ink },
+    grid: { flexDirection: "row", flexWrap: "wrap" },
+    cell: {
+      width: `${100 / 7}%`,
+      aspectRatio: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: Radii.medium,
+    },
+    cellTaken: { backgroundColor: LEAVE_COLOR },
+    dayText: { fontFamily: Fonts.regular, color: colors.ink, fontSize: 14 },
+    dayTextTaken: { color: colors.white, fontFamily: Fonts.semiBold },
+    empty: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      marginBottom: Spacing.three,
+    },
+    historyRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingVertical: Spacing.two,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    historyText: { fontFamily: Fonts.medium, color: colors.ink },
+    historyHint: {
+      fontFamily: Fonts.regular,
+      color: colors.muted,
+      fontSize: 11,
+    },
+    chooseButton: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      backgroundColor: colors.surface,
+    },
+    chooseButtonText: { fontFamily: Fonts.medium, color: colors.ink },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: Spacing.four,
+    },
+    modalCard: {
+      width: "100%",
+      backgroundColor: colors.background,
+      borderRadius: Radii.large,
+      padding: Spacing.four,
+    },
+    modalTitle: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 16,
+      color: colors.ink,
+      marginBottom: Spacing.three,
+      textAlign: "center",
+    },
+    yearNav: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: Spacing.three,
+      paddingHorizontal: Spacing.four,
+    },
+    monthGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.two,
+      marginBottom: Spacing.four,
+    },
+    monthChip: {
+      width: "30%",
+      paddingVertical: Spacing.two,
+      borderRadius: Radii.medium,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+    },
+    monthChipSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    monthChipText: {
+      fontFamily: Fonts.medium,
+      color: colors.ink,
+      fontSize: 13,
+    },
+    monthChipTextSelected: { color: colors.white, fontFamily: Fonts.semiBold },
+    modalButtonRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      gap: Spacing.three,
+    },
+    modalCancelButton: {
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+      justifyContent: "center",
+    },
+    modalCancelText: { fontFamily: Fonts.medium, color: colors.muted },
+  });
+}

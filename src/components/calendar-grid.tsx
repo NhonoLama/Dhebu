@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
+import { useTheme } from "@/theme/theme-context";
 
 interface CalendarGridProps {
   year: number;
@@ -23,6 +25,9 @@ export function CalendarGrid({
   datesWithNotes,
   onSelectDate,
 }: CalendarGridProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const firstOfMonth = new Date(year, month, 1);
   // getDay(): 0 = Sunday. We want Monday-first, so shift it.
   const firstWeekday = (firstOfMonth.getDay() + 6) % 7;
@@ -78,35 +83,37 @@ export function CalendarGrid({
   );
 }
 
-const styles = StyleSheet.create({
-  weekdayRow: { flexDirection: "row", marginBottom: Spacing.two },
-  weekdayLabel: {
-    width: `${100 / 7}%`,
-    textAlign: "center",
-    fontFamily: Fonts.semiBold,
-    fontSize: 12,
-    color: Colors.muted,
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  cell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: Radii.medium,
-  },
-  cellSelected: { backgroundColor: Colors.primary },
-  dayText: { fontFamily: Fonts.regular, color: Colors.ink, fontSize: 14 },
-  dayTextSelected: { color: Colors.white, fontFamily: Fonts.semiBold },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-    marginTop: 2,
-  },
-  dotSelected: { backgroundColor: Colors.white },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    weekdayRow: { flexDirection: "row", marginBottom: Spacing.two },
+    weekdayLabel: {
+      width: `${100 / 7}%`,
+      textAlign: "center",
+      fontFamily: Fonts.semiBold,
+      fontSize: 12,
+      color: colors.muted,
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+    },
+    cell: {
+      width: `${100 / 7}%`,
+      aspectRatio: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: Radii.medium,
+    },
+    cellSelected: { backgroundColor: colors.primary },
+    dayText: { fontFamily: Fonts.regular, color: colors.ink, fontSize: 14 },
+    dayTextSelected: { color: colors.white, fontFamily: Fonts.semiBold },
+    dot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: colors.primary,
+      marginTop: 2,
+    },
+    dotSelected: { backgroundColor: colors.white },
+  });
+}

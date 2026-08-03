@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useMemo, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -10,16 +11,18 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AnimatedPressable } from "@/components/animated-pressable";
-
-import { Colors, Fonts, Radii, Spacing } from "@/constants/theme";
+import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { TransactionType } from "@/db/types";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { useTheme } from "@/theme/theme-context";
 import { getCategoryIcon } from "@/utils/category-icons";
 import { parseAmountInput } from "@/utils/currency";
 import { currentMonthRange, toIsoDate } from "@/utils/date";
-import { Ionicons } from "@expo/vector-icons";
 
 export default function AddTransactionScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const accounts = useLedgerStore((s) => s.accounts);
   const categories = useLedgerStore((s) => s.categories);
   const addTransaction = useLedgerStore((s) => s.addTransaction);
@@ -83,20 +86,24 @@ export default function AddTransactionScreen() {
           <TypeToggleButton
             label="Expense"
             active={type === "expense"}
-            color={Colors.expense}
+            color={colors.expense}
             onPress={() => {
               setType("expense");
               setCategoryId(null);
             }}
+            styles={styles}
+            colors={colors}
           />
           <TypeToggleButton
             label="Income"
             active={type === "income"}
-            color={Colors.income}
+            color={colors.income}
             onPress={() => {
               setType("income");
               setCategoryId(null);
             }}
+            styles={styles}
+            colors={colors}
           />
         </View>
 
@@ -106,7 +113,7 @@ export default function AddTransactionScreen() {
           value={amountText}
           onChangeText={setAmountText}
           placeholder="0.00"
-          placeholderTextColor={Colors.muted}
+          placeholderTextColor={colors.muted}
           keyboardType="decimal-pad"
         />
 
@@ -128,19 +135,15 @@ export default function AddTransactionScreen() {
                     styles.categoryIconWrap,
                     {
                       backgroundColor: isSelected
-                        ? Colors.white
-                        : (cat.color ?? Colors.primary) + "22",
+                        ? colors.white
+                        : (cat.color ?? colors.primary) + "22",
                     },
                   ]}
                 >
                   <Ionicons
                     name={getCategoryIcon(cat.icon)}
                     size={20}
-                    color={
-                      isSelected
-                        ? (cat.color ?? Colors.primary)
-                        : (cat.color ?? Colors.primary)
-                    }
+                    color={cat.color ?? colors.primary}
                   />
                 </View>
                 <Text
@@ -163,7 +166,7 @@ export default function AddTransactionScreen() {
           value={note}
           onChangeText={setNote}
           placeholder="e.g. Groceries at the market"
-          placeholderTextColor={Colors.muted}
+          placeholderTextColor={colors.muted}
         />
 
         <AnimatedPressable
@@ -185,11 +188,15 @@ function TypeToggleButton({
   active,
   color,
   onPress,
+  styles,
+  colors,
 }: {
   label: string;
   active: boolean;
   color: string;
   onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+  colors: ColorScheme;
 }) {
   return (
     <AnimatedPressable
@@ -202,7 +209,7 @@ function TypeToggleButton({
       <Text
         style={[
           styles.toggleText,
-          active && { color: Colors.white, fontFamily: Fonts.semiBold },
+          active && { color: colors.white, fontFamily: Fonts.semiBold },
         ]}
       >
         {label}
@@ -211,96 +218,102 @@ function TypeToggleButton({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    backgroundColor: Colors.background,
-  },
-  scroll: { paddingBottom: 40 + 64 },
-  heading: {
-    fontFamily: Fonts.bold,
-    fontSize: 24,
-    color: Colors.ink,
-    marginTop: Spacing.three,
-    marginBottom: Spacing.five,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    gap: Spacing.three,
-    marginBottom: Spacing.five,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: Spacing.three,
-    borderRadius: Radii.medium,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: "center",
-    backgroundColor: Colors.surface,
-  },
-  toggleText: { fontFamily: Fonts.medium, color: Colors.ink },
-  label: {
-    fontFamily: Fonts.medium,
-    color: Colors.muted,
-    marginBottom: Spacing.two,
-    marginTop: Spacing.three,
-  },
-  amountInput: {
-    fontFamily: Fonts.bold,
-    fontSize: 32,
-    color: Colors.ink,
-    paddingVertical: Spacing.two,
-    borderBottomWidth: 2,
-    borderBottomColor: Colors.border,
-  },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.three },
-  categoryCard: {
-    width: 76,
-    alignItems: "center",
-    paddingVertical: Spacing.three,
-    borderRadius: Radii.medium,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: Spacing.one,
-  },
-  categoryCardSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  categoryIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radii.pill,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  categoryLabel: {
-    fontFamily: Fonts.regular,
-    fontSize: 11,
-    color: Colors.ink,
-    textAlign: "center",
-  },
-  categoryLabelSelected: {
-    color: Colors.white,
-    fontFamily: Fonts.semiBold,
-  },
-  noteInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radii.medium,
-    padding: Spacing.three,
-    fontFamily: Fonts.regular,
-    color: Colors.ink,
-    backgroundColor: Colors.surface,
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: Radii.medium,
-    paddingVertical: Spacing.four,
-    alignItems: "center",
-    marginTop: Spacing.six,
-  },
-  submitText: { color: Colors.white, fontFamily: Fonts.bold, fontSize: 16 },
-});
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: Spacing.four,
+      backgroundColor: colors.background,
+    },
+    scroll: { paddingBottom: 40 + 64 },
+    heading: {
+      fontFamily: Fonts.bold,
+      fontSize: 24,
+      color: colors.ink,
+      marginTop: Spacing.three,
+      marginBottom: Spacing.five,
+    },
+    toggleRow: {
+      flexDirection: "row",
+      gap: Spacing.three,
+      marginBottom: Spacing.five,
+    },
+    toggleButton: {
+      flex: 1,
+      paddingVertical: Spacing.three,
+      borderRadius: Radii.medium,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      backgroundColor: colors.surface,
+    },
+    toggleText: { fontFamily: Fonts.medium, color: colors.ink },
+    label: {
+      fontFamily: Fonts.medium,
+      color: colors.muted,
+      marginBottom: Spacing.two,
+      marginTop: Spacing.three,
+    },
+    amountInput: {
+      fontFamily: Fonts.bold,
+      fontSize: 32,
+      color: colors.ink,
+      paddingVertical: Spacing.two,
+      borderBottomWidth: 2,
+      borderBottomColor: colors.border,
+    },
+    categoryGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.three,
+    },
+    categoryCard: {
+      width: 76,
+      alignItems: "center",
+      paddingVertical: Spacing.three,
+      borderRadius: Radii.medium,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: Spacing.one,
+    },
+    categoryCardSelected: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    categoryIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: Radii.pill,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    categoryLabel: {
+      fontFamily: Fonts.regular,
+      fontSize: 11,
+      color: colors.ink,
+      textAlign: "center",
+    },
+    categoryLabelSelected: {
+      color: colors.white,
+      fontFamily: Fonts.semiBold,
+    },
+    noteInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      fontFamily: Fonts.regular,
+      color: colors.ink,
+      backgroundColor: colors.surface,
+    },
+    submitButton: {
+      backgroundColor: colors.primary,
+      borderRadius: Radii.medium,
+      paddingVertical: Spacing.four,
+      alignItems: "center",
+      marginTop: Spacing.six,
+    },
+    submitText: { color: colors.white, fontFamily: Fonts.bold, fontSize: 16 },
+  });
+}

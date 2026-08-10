@@ -3,8 +3,10 @@ import { useCallback, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { PendingReviewModal } from "@/components/pending-review-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { CategoryBreakdown } from "@/db/types";
+import { getPendingCount } from "@/repositories/pending-transactions.repo";
 import { getCategoryBreakdown } from "@/repositories/transactions.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { useTheme } from "@/theme/theme-context";
@@ -26,20 +28,29 @@ export default function DashboardScreen() {
   const [incomeBreakdown, setIncomeBreakdown] = useState<CategoryBreakdown[]>(
     [],
   );
+  const [pendingCount, setPendingCount] = useState(0);
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       (async () => {
         const { start, end } = currentMonthRange();
-        const [expense, income] = await Promise.all([
+        const [expense, income, count] = await Promise.all([
           getCategoryBreakdown(start, end, "expense"),
           getCategoryBreakdown(start, end, "income"),
+          getPendingCount(),
         ]);
         setExpenseBreakdown(expense);
         setIncomeBreakdown(income);
+        setPendingCount(count);
       })();
     }, []),
   );
+
+  function handleCloseReviewModal() {
+    setReviewModalVisible(false);
+    getPendingCount().then(setPendingCount); // refresh badge after reviewing
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -55,6 +66,18 @@ export default function DashboardScreen() {
           <Text style={styles.avatarText}>D</Text>
         </Pressable>
       </View>
+
+      {pendingCount > 0 && (
+        <Pressable
+          style={styles.pendingBanner}
+          onPress={() => setReviewModalVisible(true)}
+        >
+          <Text style={styles.pendingBannerText}>
+            {pendingCount} new transaction{pendingCount === 1 ? "" : "s"}{" "}
+            detected — tap to review
+          </Text>
+        </Pressable>
+      )}
 
       <View style={styles.summaryCard}>
         <SummaryRow
@@ -143,6 +166,11 @@ export default function DashboardScreen() {
             />
           </View>
         }
+      />
+
+      <PendingReviewModal
+        visible={reviewModalVisible}
+        onClose={handleCloseReviewModal}
       />
     </SafeAreaView>
   );
@@ -245,6 +273,18 @@ function createStyles(colors: ColorScheme, shadows: { soft: object }) {
       justifyContent: "center",
     },
     avatarText: { fontFamily: Fonts.bold, color: colors.white, fontSize: 16 },
+    pendingBanner: {
+      backgroundColor: colors.primary,
+      borderRadius: Radii.medium,
+      padding: Spacing.three,
+      marginBottom: Spacing.three,
+    },
+    pendingBannerText: {
+      fontFamily: Fonts.semiBold,
+      color: colors.white,
+      fontSize: 13,
+      textAlign: "center",
+    },
     summaryCard: {
       backgroundColor: colors.surface,
       borderRadius: Radii.large,

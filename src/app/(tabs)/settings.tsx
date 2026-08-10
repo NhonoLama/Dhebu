@@ -4,18 +4,29 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useEffect } from "react";
+import RNAndroidNotificationListener from "react-native-android-notification-listener";
+
 import { RenameModal } from "@/components/rename-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
+import { getDb } from "@/db/client";
 import type { Account, Category } from "@/db/types";
 import { createAccount } from "@/repositories/accounts.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { ThemeMode, useTheme } from "@/theme/theme-context";
+
+interface NotificationApp {
+  package_name: string;
+  app_label: string;
+  enabled: number;
+}
 
 type EditTarget =
   | { kind: "account"; item: Account }
@@ -47,6 +58,33 @@ export default function SettingsScreen() {
     "expense",
   );
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
+  const [permissionStatus, setPermissionStatus] = useState<string>("unknown");
+  const [notificationApps, setNotificationApps] = useState<NotificationApp[]>(
+    [],
+  );
+
+  async function loadNotificationSettings() {
+    const status = await RNAndroidNotificationListener.getPermissionStatus();
+    setPermissionStatus(status);
+    const db = await getDb();
+    const apps = await db.getAllAsync<NotificationApp>(
+      "SELECT * FROM notification_apps ORDER BY app_label ASC;",
+    );
+    setNotificationApps(apps);
+  }
+
+  useEffect(() => {
+    loadNotificationSettings();
+  }, []);
+
+  async function toggleApp(packageName: string, currentlyEnabled: number) {
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE notification_apps SET enabled = ? WHERE package_name = ?;",
+      [currentlyEnabled ? 0 : 1, packageName],
+    );
+    loadNotificationSettings();
+  }
 
   async function handleAddAccount() {
     if (!newAccountName.trim()) return;
@@ -234,6 +272,44 @@ export default function SettingsScreen() {
             <Text style={styles.addButtonText}>Add</Text>
           </Pressable>
         </View>
+
+        <Text style={styles.sectionTitle}>Auto-Detect Transactions</Text>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Notification Access</Text>
+            <Text style={styles.rowSub}>
+              {permissionStatus === "authorized"
+                ? "Enabled"
+                : "Not enabled — tap to open settings"}
+            </Text>
+          </View>
+          <Pressable
+            style={styles.iconBtn}
+            onPress={() => RNAndroidNotificationListener.requestPermission()}
+          >
+            <Text style={styles.iconBtnText}>Open Settings</Text>
+          </Pressable>
+        </View>
+
+        {notificationApps.length > 0 && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: Spacing.four }]}>
+              Approved Apps
+            </Text>
+            {notificationApps.map((app) => (
+              <View key={app.package_name} style={styles.row}>
+                <Text style={[styles.rowLabel, { flex: 1 }]}>
+                  {app.app_label}
+                </Text>
+                <Switch
+                  value={app.enabled === 1}
+                  onValueChange={() => toggleApp(app.package_name, app.enabled)}
+                  trackColor={{ true: colors.primary }}
+                />
+              </View>
+            ))}
+          </>
+        )}
 
         <RenameModal
           visible={editTarget !== null}

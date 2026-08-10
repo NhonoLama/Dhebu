@@ -1,6 +1,6 @@
 {
   "name": "dhebu",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "version": "1.0.0",
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",

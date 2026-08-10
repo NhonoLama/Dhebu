@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -112,7 +112,32 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
     `);
   }
 
-  // Future migrations: \`if (version < 5) { ... }\` etc.
+  if (version < 5) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS notification_apps (
+        package_name TEXT PRIMARY KEY,
+        app_label TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS pending_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        raw_title TEXT,
+        raw_text TEXT NOT NULL,
+        source_package TEXT NOT NULL,
+        detected_amount REAL,
+        detected_type TEXT CHECK (detected_type IN ('income','expense') OR detected_type IS NULL),
+        detected_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+        remarks TEXT,
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','dismissed')),
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_pending_status ON pending_transactions(status);
+    `);
+  }
+
+  // Future migrations: `if (version < 6) { ... }` etc.
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_VERSION};`);
 }

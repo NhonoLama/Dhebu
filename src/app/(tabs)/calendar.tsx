@@ -14,7 +14,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CalendarGrid } from "@/components/calendar-grid";
 import { LeaveView } from "@/components/leave-view";
-import { Colors, ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
+import {
+  Colors,
+  ColorScheme,
+  Fonts,
+  Radii,
+  Spacing,
+  TabBarClearance,
+} from "@/constants/theme";
 import type { CalendarNote } from "@/db/types";
 import {
   attachNotificationId,
@@ -308,8 +315,12 @@ function createStyles(colors: ColorScheme) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     topArea: { paddingHorizontal: Spacing.four },
-    scroll: { paddingHorizontal: Spacing.four, paddingBottom: Spacing.six },
-    leaveWrapper: { flex: 1, paddingHorizontal: Spacing.four },
+    scroll: { paddingHorizontal: Spacing.four, paddingBottom: TabBarClearance },
+    leaveWrapper: {
+      flex: 1,
+      paddingHorizontal: Spacing.four,
+      paddingBottom: TabBarClearance,
+    },
     heading: {
       fontFamily: Fonts.bold,
       fontSize: 24,

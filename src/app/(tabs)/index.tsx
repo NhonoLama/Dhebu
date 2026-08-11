@@ -5,13 +5,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { PendingReviewModal } from "@/components/pending-review-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
-import type { CategoryBreakdown } from "@/db/types";
+import type { CategoryBreakdown, PeriodSummary } from "@/db/types";
 import { getPendingCount } from "@/repositories/pending-transactions.repo";
-import { getCategoryBreakdown } from "@/repositories/transactions.repo";
+import {
+  getCategoryBreakdown,
+  getPeriodSummary,
+} from "@/repositories/transactions.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
-import { currentMonthRange, formatDisplayDate } from "@/utils/date";
+import {
+  currentMonthRange,
+  currentYearRange,
+  formatDisplayDate,
+} from "@/utils/date";
 
 export default function DashboardScreen() {
   const { colors, shadows } = useTheme();
@@ -28,6 +35,11 @@ export default function DashboardScreen() {
   const [incomeBreakdown, setIncomeBreakdown] = useState<CategoryBreakdown[]>(
     [],
   );
+  const [yearSummary, setYearSummary] = useState<PeriodSummary>({
+    income: 0,
+    expense: 0,
+    balance: 0,
+  });
   const [pendingCount, setPendingCount] = useState(0);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
@@ -35,14 +47,15 @@ export default function DashboardScreen() {
     useCallback(() => {
       (async () => {
         const { start, end } = currentMonthRange();
-        const [expense, income, count] = await Promise.all([
+        const yearRange = currentYearRange();
+        const [expense, income, year] = await Promise.all([
           getCategoryBreakdown(start, end, "expense"),
           getCategoryBreakdown(start, end, "income"),
-          getPendingCount(),
+          getPeriodSummary(yearRange.start, yearRange.end),
         ]);
         setExpenseBreakdown(expense);
         setIncomeBreakdown(income);
-        setPendingCount(count);
+        setYearSummary(year);
       })();
     }, []),
   );
@@ -79,27 +92,60 @@ export default function DashboardScreen() {
         </Pressable>
       )}
 
-      <View style={styles.summaryCard}>
-        <SummaryRow
-          label="Income"
-          value={summary.income}
-          color={colors.income}
-          styles={styles}
-        />
-        <SummaryRow
-          label="Expense"
-          value={summary.expense}
-          color={colors.expense}
-          styles={styles}
-        />
-        <View style={styles.divider} />
-        <SummaryRow
-          label="Balance"
-          value={summary.balance}
-          color={summary.balance >= 0 ? colors.income : colors.expense}
-          bold
-          styles={styles}
-        />
+      <View style={styles.summaryRowPair}>
+        <View style={[styles.summaryCard, styles.summaryCardHalf]}>
+          <Text style={styles.cardTitle}>This Month</Text>
+          <SummaryRow
+            label="Income"
+            value={summary.income}
+            color={colors.income}
+            styles={styles}
+            compact
+          />
+          <SummaryRow
+            label="Expense"
+            value={summary.expense}
+            color={colors.expense}
+            styles={styles}
+            compact
+          />
+          <View style={styles.divider} />
+          <SummaryRow
+            label="Balance"
+            value={summary.balance}
+            color={summary.balance >= 0 ? colors.income : colors.expense}
+            bold
+            styles={styles}
+            compact
+          />
+        </View>
+
+        <View style={[styles.summaryCard, styles.summaryCardHalf]}>
+          <Text style={styles.cardTitle}>This Year</Text>
+          <SummaryRow
+            label="Income"
+            value={yearSummary.income}
+            color={colors.income}
+            styles={styles}
+            compact
+          />
+          <SummaryRow
+            label="Expense"
+            value={yearSummary.expense}
+            color={colors.expense}
+            styles={styles}
+            compact
+          />
+          <View style={styles.divider} />
+          <SummaryRow
+            label="Balance"
+            value={yearSummary.balance}
+            color={yearSummary.balance >= 0 ? colors.income : colors.expense}
+            bold
+            styles={styles}
+            compact
+          />
+        </View>
       </View>
 
       <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -222,21 +268,30 @@ function SummaryRow({
   color,
   bold,
   styles,
+  compact,
 }: {
   label: string;
   value: number;
   color: string;
   bold?: boolean;
   styles: ReturnType<typeof createStyles>;
+  compact?: boolean;
 }) {
   return (
     <View style={styles.summaryRow}>
       <Text
-        style={[styles.summaryLabel, bold && { fontFamily: Fonts.semiBold }]}
+        style={[
+          styles.summaryLabel,
+          bold && { fontFamily: Fonts.semiBold },
+          compact && { fontSize: 11 },
+        ]}
       >
         {label}
       </Text>
-      <Text style={[styles.summaryValue, { color }]}>
+      <Text
+        style={[styles.summaryValue, { color }, compact && { fontSize: 13 }]}
+        numberOfLines={1}
+      >
         {formatCurrency(value)}
       </Text>
     </View>
@@ -285,12 +340,26 @@ function createStyles(colors: ColorScheme, shadows: { soft: object }) {
       fontSize: 13,
       textAlign: "center",
     },
+    summaryRowPair: {
+      flexDirection: "row",
+      gap: Spacing.three,
+    },
     summaryCard: {
       backgroundColor: colors.surface,
       borderRadius: Radii.large,
       padding: Spacing.four,
       gap: Spacing.two,
       ...shadows.soft,
+    },
+    summaryCardHalf: {
+      flex: 1,
+      padding: Spacing.three,
+    },
+    cardTitle: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 12,
+      color: colors.muted,
+      marginBottom: 2,
     },
     summaryRow: {
       flexDirection: "row",

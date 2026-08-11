@@ -1,9 +1,11 @@
 import {
   endOfMonth,
   endOfWeek,
+  endOfYear,
   format,
   startOfMonth,
   startOfWeek,
+  startOfYear,
 } from "date-fns";
 
 /** ISO date (yyyy-MM-dd) for use as a SQLite date column value. */
@@ -24,6 +26,14 @@ export function currentWeekRange(): { start: string; end: string } {
   return {
     start: toIsoDate(startOfWeek(now, { weekStartsOn: 1 })),
     end: toIsoDate(endOfWeek(now, { weekStartsOn: 1 })),
+  };
+}
+
+export function currentYearRange(): { start: string; end: string } {
+  const now = new Date();
+  return {
+    start: toIsoDate(startOfYear(now)),
+    end: toIsoDate(endOfYear(now)),
   };
 }
 

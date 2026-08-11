@@ -3,7 +3,7 @@ import type {
   CategoryBreakdown,
   NewTransactionInput,
   PeriodSummary,
-  TransactionWithRelations
+  TransactionWithRelations,
 } from "@/db/types";
 
 const JOIN_SELECT = `
@@ -64,6 +64,39 @@ export async function getTransactionsByDateRange(
     `${JOIN_SELECT} WHERE t.date BETWEEN ? AND ? ORDER BY t.date DESC, t.id DESC;`,
     [startDate, endDate],
   );
+}
+
+export interface AllTimeSummary extends PeriodSummary {
+  transactionCount: number;
+  earliestDate: string | null;
+}
+
+/**
+ * Income, expense, and net balance across ALL recorded transactions —
+ * no date filter. This never resets, unlike getPeriodSummary's ranges.
+ */
+export async function getAllTimeSummary(): Promise<AllTimeSummary> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ type: string; total: number }>(
+    `SELECT type, COALESCE(SUM(amount), 0) as total
+     FROM transactions
+     GROUP BY type;`,
+  );
+  const income = rows.find((r) => r.type === "income")?.total ?? 0;
+  const expense = rows.find((r) => r.type === "expense")?.total ?? 0;
+
+  const countRow = await db.getFirstAsync<{
+    count: number;
+    earliest: string | null;
+  }>(`SELECT COUNT(*) as count, MIN(date) as earliest FROM transactions;`);
+
+  return {
+    income,
+    expense,
+    balance: income - expense,
+    transactionCount: countRow?.count ?? 0,
+    earliestDate: countRow?.earliest ?? null,
+  };
 }
 
 /** Income, expense, and net balance for a date range. */

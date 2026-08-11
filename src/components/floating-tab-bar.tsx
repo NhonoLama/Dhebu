@@ -29,7 +29,7 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   index: "home",
   transactions: "list",
   add: "add",
-  reports: "pie-chart",
+  profile: "person",
   calendar: "calendar",
   settings: "settings",
 };
@@ -38,7 +38,7 @@ const LABELS: Record<string, string> = {
   index: "Home",
   transactions: "History",
   add: "Add",
-  reports: "Reports",
+  profile: "Profile",
   calendar: "Calendar",
   settings: "Settings",
 };

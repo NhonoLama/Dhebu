@@ -15,7 +15,13 @@ import { useEffect } from "react";
 import RNAndroidNotificationListener from "react-native-android-notification-listener";
 
 import { RenameModal } from "@/components/rename-modal";
-import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
+import {
+  ColorScheme,
+  Fonts,
+  Radii,
+  Spacing,
+  TabBarClearance,
+} from "@/constants/theme";
 import { getDb } from "@/db/client";
 import type { Account, Category } from "@/db/types";
 import { createAccount } from "@/repositories/accounts.repo";
@@ -332,7 +338,7 @@ function createStyles(colors: ColorScheme) {
     container: { flex: 1, backgroundColor: colors.background },
     scroll: {
       paddingHorizontal: Spacing.four,
-      paddingBottom: Spacing.six + 64,
+      paddingBottom: TabBarClearance,
     },
     heading: {
       fontFamily: Fonts.bold,

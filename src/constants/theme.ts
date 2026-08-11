@@ -65,6 +65,7 @@ export const Radii = {
 };
 
 export const BottomTabInset = 24;
+export const TabBarClearance = 110;
 export const MaxContentWidth = 560;
 
 /** Soft, colored drop shadow used on cards and the floating tab bar. */

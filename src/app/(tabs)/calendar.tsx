@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CalendarGrid } from "@/components/calendar-grid";
 import { LeaveView } from "@/components/leave-view";
-import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
+import { Colors, ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { CalendarNote } from "@/db/types";
 import {
   attachNotificationId,
@@ -393,13 +393,14 @@ function createStyles(colors: ColorScheme) {
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: Colors.border,
       borderRadius: Radii.medium,
       padding: Spacing.three,
       fontFamily: Fonts.regular,
-      color: colors.ink,
-      backgroundColor: colors.surface,
+      color: Colors.ink,
+      backgroundColor: Colors.surface,
       marginTop: Spacing.three,
+      marginBottom: Spacing.four,
     },
     remindRow: {
       flexDirection: "row",

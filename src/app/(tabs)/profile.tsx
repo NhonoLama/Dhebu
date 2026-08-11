@@ -13,6 +13,7 @@ import {
 import RNAndroidNotificationListener from "react-native-android-notification-listener";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { EmojiPicker } from "@/components/emoji-picker";
 import { RenameModal } from "@/components/rename-modal";
 import {
   ColorScheme,
@@ -28,6 +29,11 @@ import {
   getAllTimeSummary,
   type AllTimeSummary,
 } from "@/repositories/transactions.repo";
+import {
+  getUserProfile,
+  updateUserProfile,
+  type UserProfile,
+} from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { ThemeMode, useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
@@ -72,6 +78,10 @@ export default function ProfileScreen() {
   const addCategory = useLedgerStore((s) => s.addCategory);
 
   const [summary, setSummary] = useState<AllTimeSummary>(EMPTY_SUMMARY);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+
   const [newAccountName, setNewAccountName] = useState("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryType, setNewCategoryType] = useState<"income" | "expense">(
@@ -86,8 +96,26 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       getAllTimeSummary().then(setSummary);
+      getUserProfile().then((p) => {
+        setProfile(p);
+        if (p) setNameInput(p.name);
+      });
     }, []),
   );
+
+  async function handleSaveName() {
+    if (!nameInput.trim()) return;
+    await updateUserProfile({ name: nameInput.trim() });
+    const updated = await getUserProfile();
+    setProfile(updated);
+    setEditingName(false);
+  }
+
+  async function handleChangeAvatar(emoji: string) {
+    await updateUserProfile({ avatarEmoji: emoji });
+    const updated = await getUserProfile();
+    setProfile(updated);
+  }
 
   async function loadNotificationSettings() {
     const status = await RNAndroidNotificationListener.getPermissionStatus();
@@ -180,6 +208,36 @@ export default function ProfileScreen() {
         <Text style={styles.subheading}>
           Your all-time ledger, since day one
         </Text>
+
+        <View style={styles.identityCard}>
+          <View style={styles.identityAvatar}>
+            <Text style={styles.identityEmoji}>
+              {profile?.avatar_emoji ?? "🙂"}
+            </Text>
+          </View>
+          {editingName ? (
+            <View style={styles.nameEditRow}>
+              <TextInput
+                style={styles.nameInput}
+                value={nameInput}
+                onChangeText={setNameInput}
+                autoFocus
+              />
+              <Pressable onPress={handleSaveName}>
+                <Text style={styles.saveNameText}>Save</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={() => setEditingName(true)}>
+              <Text style={styles.identityName}>{profile?.name ?? "—"}</Text>
+              <Text style={styles.identityHint}>tap to edit name</Text>
+            </Pressable>
+          )}
+          <EmojiPicker
+            value={profile?.avatar_emoji ?? "🙂"}
+            onChange={handleChangeAvatar}
+          />
+        </View>
 
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Lifetime Balance</Text>
@@ -446,6 +504,53 @@ function createStyles(colors: ColorScheme) {
       marginTop: 2,
       marginBottom: Spacing.four,
     },
+    identityCard: {
+      backgroundColor: colors.surface,
+      borderRadius: Radii.large,
+      padding: Spacing.four,
+      alignItems: "center",
+      marginBottom: Spacing.three,
+    },
+    identityAvatar: {
+      width: 64,
+      height: 64,
+      borderRadius: Radii.pill,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: Spacing.two,
+    },
+    identityEmoji: { fontSize: 32 },
+    identityName: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 17,
+      color: colors.ink,
+      textAlign: "center",
+    },
+    identityHint: {
+      fontFamily: Fonts.regular,
+      fontSize: 11,
+      color: colors.muted,
+      textAlign: "center",
+      marginBottom: Spacing.three,
+    },
+    nameEditRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.two,
+      marginBottom: Spacing.three,
+    },
+    nameInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: Radii.medium,
+      padding: Spacing.two,
+      fontFamily: Fonts.medium,
+      color: colors.ink,
+      backgroundColor: colors.background,
+      minWidth: 140,
+    },
+    saveNameText: { fontFamily: Fonts.semiBold, color: colors.primary },
     balanceCard: {
       backgroundColor: colors.surface,
       borderRadius: Radii.large,

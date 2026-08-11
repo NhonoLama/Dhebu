@@ -11,6 +11,7 @@ import {
   getCategoryBreakdown,
   getPeriodSummary,
 } from "@/repositories/transactions.repo";
+import { getUserProfile, UserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
@@ -40,6 +41,7 @@ export default function DashboardScreen() {
     expense: 0,
     balance: 0,
   });
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
@@ -48,14 +50,16 @@ export default function DashboardScreen() {
       (async () => {
         const { start, end } = currentMonthRange();
         const yearRange = currentYearRange();
-        const [expense, income, year] = await Promise.all([
+        const [expense, income, year, userProfile] = await Promise.all([
           getCategoryBreakdown(start, end, "expense"),
           getCategoryBreakdown(start, end, "income"),
           getPeriodSummary(yearRange.start, yearRange.end),
+          getUserProfile(),
         ]);
         setExpenseBreakdown(expense);
         setIncomeBreakdown(income);
         setYearSummary(year);
+        setProfile(userProfile);
       })();
     }, []),
   );
@@ -69,14 +73,18 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.greeting}>Hi there 👋</Text>
+          <Text style={styles.greeting}>
+            Hi{profile ? `, ${profile.name}` : ""} 👋
+          </Text>
           <Text style={styles.subGreeting}>Here's your financial summary</Text>
         </View>
         <Pressable
           style={styles.avatar}
           onPress={() => router.push("/(tabs)/profile")}
         >
-          <Text style={styles.avatarText}>D</Text>
+          <Text style={styles.avatarEmoji}>
+            {profile?.avatar_emoji ?? "🙂"}
+          </Text>
         </Pressable>
       </View>
 
@@ -323,11 +331,11 @@ function createStyles(colors: ColorScheme, shadows: { soft: object }) {
       width: 44,
       height: 44,
       borderRadius: Radii.pill,
-      backgroundColor: colors.primary,
+      backgroundColor: colors.surface,
       alignItems: "center",
       justifyContent: "center",
     },
-    avatarText: { fontFamily: Fonts.bold, color: colors.white, fontSize: 16 },
+    avatarEmoji: { fontSize: 22 },
     pendingBanner: {
       backgroundColor: colors.primary,
       borderRadius: Radii.medium,

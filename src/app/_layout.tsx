@@ -10,7 +10,10 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
+import { router } from "expo-router";
+
 import { Colors } from "@/constants/theme";
+import { getUserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { ThemeProvider } from "@/theme/theme-context";
 import { currentMonthRange } from "@/utils/date";
@@ -35,6 +38,11 @@ export default function RootLayout() {
         await init();
         const { start, end } = currentMonthRange();
         await refresh(start, end);
+
+        const profile = await getUserProfile();
+        if (!profile) {
+          router.replace("/onboarding" as any);
+        }
       } finally {
         setDbReady(true);
       }
@@ -66,6 +74,7 @@ export default function RootLayout() {
     <ThemeProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="onboarding" />
       </Stack>
     </ThemeProvider>
   );

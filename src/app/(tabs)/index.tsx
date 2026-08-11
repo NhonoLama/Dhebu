@@ -74,7 +74,7 @@ export default function DashboardScreen() {
         </View>
         <Pressable
           style={styles.avatar}
-          onPress={() => router.push("/(tabs)/settings")}
+          onPress={() => router.push("/(tabs)/profile")}
         >
           <Text style={styles.avatarText}>D</Text>
         </Pressable>

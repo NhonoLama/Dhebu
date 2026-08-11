@@ -31,7 +31,6 @@ const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   add: "add",
   profile: "person",
   calendar: "calendar",
-  settings: "settings",
 };
 
 const LABELS: Record<string, string> = {
@@ -40,7 +39,6 @@ const LABELS: Record<string, string> = {
   add: "Add",
   profile: "Profile",
   calendar: "Calendar",
-  settings: "Settings",
 };
 
 const RAISED_ROUTE = "add";

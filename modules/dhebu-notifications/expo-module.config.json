@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["DhebuNotificationsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.dhebunotifications.DhebuNotificationsModule"]
+  }
+}

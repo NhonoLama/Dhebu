@@ -4,7 +4,8 @@ import { createPendingTransaction } from "@/repositories/pending-transactions.re
 import { parseNotification } from "@/utils/notification-parser";
 
 interface RawNotificationEvent {
-  app: string; // package name, e.g. "com.prabhubank.mobile"
+  app: string;
+  appLabel?: string;
   title: string;
   text: string;
 }
@@ -19,6 +20,8 @@ async function isApprovedSource(
   packageName: string,
   appLabel: string,
 ): Promise<boolean> {
+  if (!packageName) return false;
+
   const db = await getDb();
   const existing = await db.getFirstAsync<{ enabled: number }>(
     "SELECT enabled FROM notification_apps WHERE package_name = ?;",
@@ -30,9 +33,10 @@ async function isApprovedSource(
   }
 
   // First time seeing this app — register it as disabled by default.
+  // Fall back to the package name itself if no readable label was given.
   await db.runAsync(
     "INSERT INTO notification_apps (package_name, app_label, enabled) VALUES (?, ?, 0);",
-    [packageName, appLabel],
+    [packageName, appLabel || packageName],
   );
   return false;
 }
@@ -46,7 +50,17 @@ export async function handleNotificationEvent(
   event: RawNotificationEvent,
 ): Promise<void> {
   try {
-    const approved = await isApprovedSource(event.app, event.app);
+    // Some system notifications (grouped summaries, certain OS-level
+    // alerts) arrive with no package name at all — skip these instead
+    // of attempting a DB insert with a null label.
+    if (!event.app || typeof event.app !== "string") {
+      return;
+    }
+
+    const approved = await isApprovedSource(
+      event.app,
+      event.appLabel ?? event.app,
+    );
     if (!approved) return; // Not an approved financial app — ignore silently.
 
     const categories = await getAllCategories();

@@ -47,20 +47,40 @@ export default function DashboardScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      let active = true;
+
       (async () => {
-        const { start, end } = currentMonthRange();
-        const yearRange = currentYearRange();
-        const [expense, income, year, userProfile] = await Promise.all([
-          getCategoryBreakdown(start, end, "expense"),
-          getCategoryBreakdown(start, end, "income"),
-          getPeriodSummary(yearRange.start, yearRange.end),
-          getUserProfile(),
-        ]);
-        setExpenseBreakdown(expense);
-        setIncomeBreakdown(income);
-        setYearSummary(year);
-        setProfile(userProfile);
+        try {
+          const { start, end } = currentMonthRange();
+          const yearRange = currentYearRange();
+
+          const [count, expense, income, year, userProfile] = await Promise.all(
+            [
+              getPendingCount(),
+              getCategoryBreakdown(start, end, "expense"),
+              getCategoryBreakdown(start, end, "income"),
+              getPeriodSummary(yearRange.start, yearRange.end),
+              getUserProfile(),
+            ],
+          );
+
+          if (!active) {
+            return;
+          }
+
+          setPendingCount(count);
+          setExpenseBreakdown(expense);
+          setIncomeBreakdown(income);
+          setYearSummary(year);
+          setProfile(userProfile);
+        } catch (error) {
+          console.error("DHEBU: failed refreshing dashboard", error);
+        }
       })();
+
+      return () => {
+        active = false;
+      };
     }, []),
   );
 

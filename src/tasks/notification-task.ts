@@ -10,50 +10,86 @@ interface RawNotificationEvent {
   text: string;
 }
 
-/**
- * Checks whether this app's package is one the user has approved as a
- * "financial" notification source. Unknown apps get auto-registered as
- * disabled, so they show up in Settings for the user to opt in later —
- * we never parse from an app the user hasn't explicitly approved.
- */
 async function isApprovedSource(
   packageName: string,
   appLabel: string,
 ): Promise<boolean> {
-  if (!packageName) return false;
+  if (!packageName) {
+    console.log("DHEBU PIPELINE: empty package name");
+    return false;
+  }
 
   const db = await getDb();
-  const existing = await db.getFirstAsync<{ enabled: number }>(
-    "SELECT enabled FROM notification_apps WHERE package_name = ?;",
+
+  console.log("DHEBU PIPELINE: checking source", {
+    packageName,
+    appLabel,
+  });
+
+  const existing = await db.getFirstAsync<{
+    enabled: number;
+    app_label: string;
+  }>(
+    `
+      SELECT enabled, app_label
+      FROM notification_apps
+      WHERE package_name = ?;
+    `,
     [packageName],
   );
 
+  console.log("DHEBU PIPELINE: source database result", existing);
+
   if (existing) {
+    if (
+      appLabel &&
+      appLabel !== packageName &&
+      appLabel !== existing.app_label
+    ) {
+      await db.runAsync(
+        `
+          UPDATE notification_apps
+          SET app_label = ?
+          WHERE package_name = ?;
+        `,
+        [appLabel, packageName],
+      );
+    }
+
     return existing.enabled === 1;
   }
 
-  // First time seeing this app — register it as disabled by default.
-  // Fall back to the package name itself if no readable label was given.
   await db.runAsync(
-    "INSERT INTO notification_apps (package_name, app_label, enabled) VALUES (?, ?, 0);",
+    `
+      INSERT INTO notification_apps (
+        package_name,
+        app_label,
+        enabled
+      )
+      VALUES (?, ?, 0);
+    `,
     [packageName, appLabel || packageName],
   );
+
+  console.log(
+    "DHEBU PIPELINE: source missing from SQLite, registered disabled",
+    {
+      packageName,
+      appLabel,
+    },
+  );
+
   return false;
 }
 
-/**
- * The actual headless task function. Runs with no UI, no React tree —
- * just does its work and returns. MUST return a Promise (the native side
- * awaits it before letting Android know the task finished).
- */
 export async function handleNotificationEvent(
   event: RawNotificationEvent,
 ): Promise<void> {
+  console.log("DHEBU PIPELINE: handleNotificationEvent started", event);
+
   try {
-    // Some system notifications (grouped summaries, certain OS-level
-    // alerts) arrive with no package name at all — skip these instead
-    // of attempting a DB insert with a null label.
     if (!event.app || typeof event.app !== "string") {
+      console.log("DHEBU PIPELINE: invalid app package");
       return;
     }
 
@@ -61,31 +97,67 @@ export async function handleNotificationEvent(
       event.app,
       event.appLabel ?? event.app,
     );
-    if (!approved) return; // Not an approved financial app — ignore silently.
+
+    console.log("DHEBU PIPELINE: source approved?", approved);
+
+    if (!approved) {
+      console.log("DHEBU PIPELINE: ignored because source is not approved", {
+        app: event.app,
+        appLabel: event.appLabel,
+      });
+
+      return;
+    }
 
     const categories = await getAllCategories();
+
+    console.log("DHEBU PIPELINE: categories loaded", categories.length);
+
     const parsed = parseNotification(
       event.title ?? "",
       event.text ?? "",
       categories,
     );
 
-    // Skip notifications where we couldn't even find an amount —
-    // almost certainly not a transaction (e.g. a promo/marketing push).
-    if (parsed.amount === null) return;
+    console.log("DHEBU: parsed notification", {
+      app: event.app,
+      appLabel: event.appLabel,
+      title: event.title,
+      text: event.text,
+      parsed,
+    });
 
-    await createPendingTransaction({
+    if (parsed.amount === null) {
+      console.log("DHEBU PIPELINE: no amount detected, ignoring notification");
+
+      return;
+    }
+
+    const created = await createPendingTransaction({
       raw_title: event.title ?? null,
+
       raw_text: event.text ?? "",
+
       source_package: event.app,
+
       detected_amount: parsed.amount,
+
       detected_type: parsed.type,
+
       detected_category_id: parsed.categoryId,
+
       remarks: parsed.remarks,
     });
+
+    console.log("DHEBU: pending transaction created", {
+      result: created,
+      amount: parsed.amount,
+      type: parsed.type,
+      categoryId: parsed.categoryId,
+      remarks: parsed.remarks,
+      source: event.app,
+    });
   } catch (error) {
-    // Headless tasks fail silently to the user by design — but we still
-    // don't want one bad notification to crash the listener service.
-    console.error("notification-task error:", error);
+    console.error("DHEBU PIPELINE ERROR:", error);
   }
 }

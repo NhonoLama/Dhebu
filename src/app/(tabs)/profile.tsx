@@ -1,7 +1,11 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
+  ActivityIndicator,
   Alert,
+  AppState,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,10 +14,12 @@ import {
   TextInput,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EmojiPicker } from "@/components/emoji-picker";
 import { RenameModal } from "@/components/rename-modal";
+
 import {
   ColorScheme,
   Fonts,
@@ -21,33 +27,48 @@ import {
   Spacing,
   TabBarClearance,
 } from "@/constants/theme";
+
 import { getDb } from "@/db/client";
+
 import type { Account, Category } from "@/db/types";
+
+import {
+  getAllowedNotificationApps,
+  getInstalledApps,
+  isNotificationAccessGranted,
+  openNotificationAccessSettings,
+  setAllowedNotificationApps,
+  type DhebuInstalledApp,
+} from "@/modules/dhebu-notifications";
+
 import { createAccount } from "@/repositories/accounts.repo";
+
 import {
   getAllTimeSummary,
   type AllTimeSummary,
 } from "@/repositories/transactions.repo";
+
 import {
   getUserProfile,
   updateUserProfile,
   type UserProfile,
 } from "@/repositories/user-profile.repo";
+
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { handleNotificationEvent } from "@/tasks/notification-task";
 import { ThemeMode, useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
 import { formatDisplayDate } from "@/utils/date";
 
-interface NotificationApp {
-  package_name: string;
-  app_label: string;
-  enabled: number;
-}
-
 type EditTarget =
-  | { kind: "account"; item: Account }
-  | { kind: "category"; item: Category }
+  | {
+      kind: "account";
+      item: Account;
+    }
+  | {
+      kind: "category";
+      item: Category;
+    }
   | null;
 
 const THEME_OPTIONS: {
@@ -75,32 +96,6 @@ const EMPTY_SUMMARY: AllTimeSummary = {
   transactionCount: 0,
   earliestDate: null,
 };
-
-const TEST_NOTIFICATIONS = [
-  {
-    label: "Debit (Dr)",
-    title: "Prabhu Bank",
-    text: "AC#024XX5991 Dr by NPR 1000 on 09Aug26 09:43:29 - 14047889dqhs,petroll",
-  },
-
-  {
-    label: "Credit (Cr)",
-    title: "Prabhu Bank",
-    text: "AC#024XX5991 Cr by NPR 29300 on 07Aug26 18:35:25 - CIPSDAWA LAMA LAMA#H",
-  },
-
-  {
-    label: "Withdrawn",
-    title: "Prabhu Bank",
-    text: "Dear DAWA, NPR 800.00 has been withdrawn from your A/C 257###18 on 07/08/2026 19:42:30. Rmk: Load eSewa,UPI-192128507, Thank You ! Prabhu Bank",
-  },
-
-  {
-    label: "Deposited",
-    title: "Prabhu Bank",
-    text: "Dear DAWA, NPR 20,000.00 has been deposited in your A/C 257###18 on 29/07/2026 09:18:35. Rmk: IntraBnk,suppliers,986941 Thank You ! Prabhu Bank",
-  },
-];
 
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
@@ -141,9 +136,33 @@ export default function ProfileScreen() {
 
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
 
-  const [notificationApps, setNotificationApps] = useState<NotificationApp[]>(
-    [],
+  /*
+   * ============================
+   * NOTIFICATION SETTINGS
+   * ============================
+   */
+
+  const [notificationAccess, setNotificationAccess] = useState<boolean | null>(
+    null,
   );
+
+  const [installedApps, setInstalledApps] = useState<DhebuInstalledApp[]>([]);
+
+  const [allowedPackages, setAllowedPackages] = useState<string[]>([]);
+
+  const [appSelectorVisible, setAppSelectorVisible] = useState(false);
+
+  const [appSearch, setAppSearch] = useState("");
+
+  const [loadingApps, setLoadingApps] = useState(false);
+
+  const [savingPackage, setSavingPackage] = useState<string | null>(null);
+
+  /*
+   * ============================
+   * PROFILE DATA
+   * ============================
+   */
 
   useFocusEffect(
     useCallback(() => {
@@ -156,8 +175,179 @@ export default function ProfileScreen() {
           setNameInput(p.name);
         }
       });
+
+      loadNotificationSettings();
     }, []),
   );
+
+  /*
+   * Refresh notification access
+   * when returning from Android
+   * settings.
+   */
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        refreshNotificationAccess();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  async function refreshNotificationAccess() {
+    try {
+      const granted = await isNotificationAccessGranted();
+
+      setNotificationAccess(granted);
+    } catch (error) {
+      console.error("DHEBU: failed checking notification access", error);
+
+      setNotificationAccess(false);
+    }
+  }
+
+  async function loadNotificationSettings() {
+    try {
+      setLoadingApps(true);
+
+      const [granted, apps, packages] = await Promise.all([
+        isNotificationAccessGranted(),
+        getInstalledApps(),
+        getAllowedNotificationApps(),
+      ]);
+
+      setNotificationAccess(granted);
+
+      setInstalledApps(apps);
+
+      setAllowedPackages(packages);
+    } catch (error) {
+      console.error("DHEBU: failed loading notification settings", error);
+    } finally {
+      setLoadingApps(false);
+    }
+  }
+
+  /*
+   * Important:
+   *
+   * We save selected apps in TWO places.
+   *
+   * 1. Native SharedPreferences:
+   *    Kotlin uses this BEFORE sending
+   *    anything to JavaScript.
+   *
+   * 2. notification_apps SQLite:
+   *    The existing transaction pipeline
+   *    still checks this database table.
+   *
+   * This keeps both layers synchronized.
+   */
+  async function toggleNotificationApp(app: DhebuInstalledApp) {
+    if (savingPackage) {
+      return;
+    }
+
+    const currentlyAllowed = allowedPackages.includes(app.packageName);
+
+    const nextPackages = currentlyAllowed
+      ? allowedPackages.filter((packageName) => packageName !== app.packageName)
+      : [...allowedPackages, app.packageName];
+
+    try {
+      setSavingPackage(app.packageName);
+
+      /*
+       * Update native package filter.
+       */
+      await setAllowedNotificationApps(nextPackages);
+
+      /*
+       * Keep SQLite source approval
+       * synchronized with native settings.
+       */
+      const db = await getDb();
+
+      await db.runAsync(
+        `
+        INSERT INTO notification_apps (
+          package_name,
+          app_label,
+          enabled
+        )
+        VALUES (?, ?, ?)
+
+        ON CONFLICT(package_name)
+        DO UPDATE SET
+          app_label = excluded.app_label,
+          enabled = excluded.enabled;
+        `,
+        [app.packageName, app.appLabel, currentlyAllowed ? 0 : 1],
+      );
+
+      setAllowedPackages(nextPackages);
+
+      console.log(
+        currentlyAllowed
+          ? "DHEBU: notification app disabled"
+          : "DHEBU: notification app enabled",
+        {
+          appLabel: app.appLabel,
+          packageName: app.packageName,
+        },
+      );
+    } catch (error) {
+      console.error("DHEBU: failed updating allowed notification app", error);
+
+      Alert.alert(
+        "Could not update app",
+        "Dhebu could not save this notification source.",
+      );
+
+      /*
+       * Reload native truth if either
+       * operation failed.
+       */
+      await loadNotificationSettings();
+    } finally {
+      setSavingPackage(null);
+    }
+  }
+
+  /*
+   * Apps shown in selector.
+   */
+  const filteredInstalledApps = useMemo(() => {
+    const query = appSearch.trim().toLowerCase();
+
+    if (!query) {
+      return installedApps;
+    }
+
+    return installedApps.filter(
+      (app) =>
+        app.appLabel.toLowerCase().includes(query) ||
+        app.packageName.toLowerCase().includes(query),
+    );
+  }, [installedApps, appSearch]);
+
+  /*
+   * Selected apps displayed on Profile.
+   */
+  const selectedApps = useMemo(() => {
+    return installedApps.filter((app) =>
+      allowedPackages.includes(app.packageName),
+    );
+  }, [installedApps, allowedPackages]);
+
+  /*
+   * ============================
+   * PROFILE
+   * ============================
+   */
 
   async function handleSaveName() {
     if (!nameInput.trim()) {
@@ -184,185 +374,147 @@ export default function ProfileScreen() {
     setProfile(updated);
   }
 
-  async function loadNotificationSettings() {
-    try {
-      const db = await getDb();
+  /*
+   * ============================
+   * DEBUG TRANSACTIONS
+   * ============================
+   */
 
-      const apps = await db.getAllAsync<NotificationApp>(
-        `
-            SELECT *
-            FROM notification_apps
-            ORDER BY app_label ASC;
-          `,
-      );
+  const TEST_NOTIFICATIONS = [
+    {
+      label: "Debit (Dr)",
+      title: "Prabhu Bank",
+      text: "AC#024XX5991 Dr by NPR 1000 on 09Aug26 09:43:29 - 14047889dqhs,petroll",
+    },
 
-      setNotificationApps(apps);
-    } catch (error) {
-      console.error("Failed to load notification apps:", error);
-    }
-  }
+    {
+      label: "Credit (Cr)",
+      title: "Prabhu Bank",
+      text: "AC#024XX5991 Cr by NPR 29300 on 07Aug26 18:35:25 - CIPSDAWA LAMA LAMA#H",
+    },
 
-  useEffect(() => {
-    loadNotificationSettings();
-  }, []);
+    {
+      label: "Withdrawn",
+      title: "Prabhu Bank",
+      text: "Dear DAWA, NPR 800.00 has been withdrawn from your A/C 257###18 on 07/08/2026 19:42:30. Rmk: Load eSewa,UPI-192128507, Thank You ! Prabhu Bank",
+    },
 
-  async function toggleApp(packageName: string, currentlyEnabled: number) {
-    try {
-      const db = await getDb();
-
-      await db.runAsync(
-        `
-          UPDATE notification_apps
-          SET enabled = ?
-          WHERE package_name = ?;
-        `,
-        [currentlyEnabled ? 0 : 1, packageName],
-      );
-
-      await loadNotificationSettings();
-    } catch (error) {
-      console.error("Failed to toggle notification app:", error);
-
-      Alert.alert("Error", "Could not update this app.");
-    }
-  }
+    {
+      label: "Deposited",
+      title: "Prabhu Bank",
+      text: "Dear DAWA, NPR 20,000.00 has been deposited in your A/C 257###18 on 29/07/2026 09:18:35. Rmk: IntraBnk,suppliers,986941 Thank You ! Prabhu Bank",
+    },
+  ];
 
   async function handleSimulateNotification(
     sample: (typeof TEST_NOTIFICATIONS)[number],
   ) {
-    try {
-      const db = await getDb();
+    const db = await getDb();
 
-      await db.runAsync(
-        `
-          INSERT INTO notification_apps (
-            package_name,
-            app_label,
-            enabled
-          )
-          VALUES (
-            'com.dhebu.debug.testbank',
-            'Test Bank (Debug)',
-            1
-          )
-          ON CONFLICT(package_name)
-          DO UPDATE SET
-            app_label = 'Test Bank (Debug)',
-            enabled = 1;
-        `,
-      );
+    await db.runAsync(
+      `
+      INSERT INTO notification_apps (
+        package_name,
+        app_label,
+        enabled
+      )
+      VALUES (
+        'com.dhebu.debug.testbank',
+        'Test Bank (Debug)',
+        1
+      )
 
-      await handleNotificationEvent({
-        app: "com.dhebu.debug.testbank",
+      ON CONFLICT(package_name)
+      DO UPDATE SET
+        enabled = 1;
+      `,
+    );
 
-        title: sample.title,
+    await handleNotificationEvent({
+      app: "com.dhebu.debug.testbank",
 
-        text: sample.text,
-      });
+      appLabel: "Test Bank (Debug)",
 
-      Alert.alert(
-        "Test notification simulated",
-        "Check the Dashboard banner to review the detected transaction.",
-      );
+      title: sample.title,
 
-      await loadNotificationSettings();
-    } catch (error) {
-      console.error("Debug notification failed:", error);
+      text: sample.text,
+    });
 
-      Alert.alert(
-        "Debug Error",
-        error instanceof Error ? error.message : String(error),
-      );
-    }
+    Alert.alert(
+      "Test notification simulated",
+      "Check the Dashboard banner to review the detected transaction.",
+    );
   }
+
+  /*
+   * ============================
+   * ACCOUNTS
+   * ============================
+   */
 
   async function handleAddAccount() {
     if (!newAccountName.trim()) {
       return;
     }
 
-    try {
-      await createAccount({
-        name: newAccountName.trim(),
+    await createAccount({
+      name: newAccountName.trim(),
 
-        type: "other",
-      });
+      type: "other",
+    });
 
-      setNewAccountName("");
+    setNewAccountName("");
 
-      await init();
-    } catch (error) {
-      console.error("Failed to add account:", error);
-
-      Alert.alert("Error", "Could not create account.");
-    }
+    await init();
   }
 
   function handleDeleteAccount(account: Account) {
     Alert.alert(
       `Delete "${account.name}"?`,
-
       "Any transactions on this account will also be removed. This cannot be undone.",
-
       [
         {
           text: "Cancel",
-
           style: "cancel",
         },
-
         {
           text: "Delete",
-
           style: "destructive",
 
-          onPress: async () => {
-            try {
-              await removeAccount(account.id);
-            } catch (error) {
-              console.error("Failed to delete account:", error);
-
-              Alert.alert("Error", "Could not delete account.");
-            }
-          },
+          onPress: () => removeAccount(account.id),
         },
       ],
     );
   }
 
+  /*
+   * ============================
+   * CATEGORIES
+   * ============================
+   */
+
   function handleDeleteCategory(category: Category) {
-    Alert.alert(
-      `Delete "${category.name}"?`,
+    Alert.alert(`Delete "${category.name}"?`, "This cannot be undone.", [
+      {
+        text: "Cancel",
+        style: "cancel",
+      },
+      {
+        text: "Delete",
+        style: "destructive",
 
-      "This cannot be undone.",
-
-      [
-        {
-          text: "Cancel",
-
-          style: "cancel",
+        onPress: async () => {
+          try {
+            await removeCategory(category.id);
+          } catch {
+            Alert.alert(
+              "Cannot delete",
+              "This category still has transactions recorded against it.",
+            );
+          }
         },
-
-        {
-          text: "Delete",
-
-          style: "destructive",
-
-          onPress: async () => {
-            try {
-              await removeCategory(category.id);
-            } catch (error) {
-              console.error("Failed to delete category:", error);
-
-              Alert.alert(
-                "Cannot delete",
-                "This category still has transactions recorded against it.",
-              );
-            }
-          },
-        },
-      ],
-    );
+      },
+    ]);
   }
 
   async function handleAddCategory() {
@@ -370,19 +522,13 @@ export default function ProfileScreen() {
       return;
     }
 
-    try {
-      await addCategory({
-        name: newCategoryName.trim(),
+    await addCategory({
+      name: newCategoryName.trim(),
 
-        type: newCategoryType,
-      });
+      type: newCategoryType,
+    });
 
-      setNewCategoryName("");
-    } catch (error) {
-      console.error("Failed to add category:", error);
-
-      Alert.alert("Error", "Could not create category.");
-    }
+    setNewCategoryName("");
   }
 
   async function handleRenameSubmit(value: string) {
@@ -390,20 +536,20 @@ export default function ProfileScreen() {
       return;
     }
 
-    try {
-      if (editTarget.kind === "account") {
-        await renameAccount(editTarget.item.id, value);
-      } else {
-        await renameCategory(editTarget.item.id, value);
-      }
-
-      setEditTarget(null);
-    } catch (error) {
-      console.error("Rename failed:", error);
-
-      Alert.alert("Error", "Could not rename this item.");
+    if (editTarget.kind === "account") {
+      await renameAccount(editTarget.item.id, value);
+    } else {
+      await renameCategory(editTarget.item.id, value);
     }
+
+    setEditTarget(null);
   }
+
+  /*
+   * ============================
+   * RENDER
+   * ============================
+   */
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -502,6 +648,8 @@ export default function ProfileScreen() {
           />
         </View>
 
+        {/* Appearance */}
+
         <Text style={styles.sectionTitle}>Appearance</Text>
 
         <View style={styles.themeToggleRow}>
@@ -527,26 +675,27 @@ export default function ProfileScreen() {
           })}
         </View>
 
+        {/* Accounts */}
+
         <Text style={styles.sectionTitle}>Accounts</Text>
 
-        {accounts.map((account) => (
-          <View key={account.id} style={styles.row}>
+        {accounts.map((a) => (
+          <View key={a.id} style={styles.row}>
             <View
               style={{
                 flex: 1,
               }}
             >
-              <Text style={styles.rowLabel}>{account.name}</Text>
+              <Text style={styles.rowLabel}>{a.name}</Text>
 
-              <Text style={styles.rowSub}>{account.type}</Text>
+              <Text style={styles.rowSub}>{a.type}</Text>
             </View>
 
             <Pressable
               onPress={() =>
                 setEditTarget({
                   kind: "account",
-
-                  item: account,
+                  item: a,
                 })
               }
               style={styles.iconBtn}
@@ -555,7 +704,7 @@ export default function ProfileScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => handleDeleteAccount(account)}
+              onPress={() => handleDeleteAccount(a)}
               style={styles.iconBtn}
             >
               <Text
@@ -586,26 +735,27 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
+        {/* Categories */}
+
         <Text style={styles.sectionTitle}>Categories</Text>
 
-        {categories.map((category) => (
-          <View key={category.id} style={styles.row}>
+        {categories.map((c) => (
+          <View key={c.id} style={styles.row}>
             <View
               style={{
                 flex: 1,
               }}
             >
-              <Text style={styles.rowLabel}>{category.name}</Text>
+              <Text style={styles.rowLabel}>{c.name}</Text>
 
-              <Text style={styles.rowSub}>{category.type}</Text>
+              <Text style={styles.rowSub}>{c.type}</Text>
             </View>
 
             <Pressable
               onPress={() =>
                 setEditTarget({
                   kind: "category",
-
-                  item: category,
+                  item: c,
                 })
               }
               style={styles.iconBtn}
@@ -614,7 +764,7 @@ export default function ProfileScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => handleDeleteCategory(category)}
+              onPress={() => handleDeleteCategory(c)}
               style={styles.iconBtn}
             >
               <Text
@@ -632,25 +782,23 @@ export default function ProfileScreen() {
         ))}
 
         <View style={styles.typeToggleRow}>
-          {(["expense", "income"] as const).map((type) => (
+          {(["expense", "income"] as const).map((t) => (
             <Pressable
-              key={type}
-              onPress={() => setNewCategoryType(type)}
+              key={t}
+              onPress={() => setNewCategoryType(t)}
               style={[
                 styles.typeChip,
-
-                newCategoryType === type && {
+                newCategoryType === t && {
                   backgroundColor:
-                    type === "income" ? colors.income : colors.expense,
+                    t === "income" ? colors.income : colors.expense,
                 },
               ]}
             >
               <Text
                 style={
-                  newCategoryType === type
+                  newCategoryType === t
                     ? {
                         color: colors.white,
-
                         fontFamily: Fonts.semiBold,
                       }
                     : {
@@ -658,7 +806,7 @@ export default function ProfileScreen() {
                       }
                 }
               >
-                {type === "income" ? "Income" : "Expense"}
+                {t === "income" ? "Income" : "Expense"}
               </Text>
             </Pressable>
           ))}
@@ -678,66 +826,132 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        {/* AUTO DETECT */}
+        {/* ========================
+            AUTO DETECT
+           ======================== */}
 
         <Text style={styles.sectionTitle}>Auto-Detect Transactions</Text>
 
-        <View style={styles.row}>
+        <View style={styles.notificationCard}>
+          <View style={styles.notificationHeader}>
+            <View
+              style={{
+                flex: 1,
+              }}
+            >
+              <Text style={styles.rowLabel}>Notification Access</Text>
+
+              <Text style={styles.rowSub}>
+                {notificationAccess === null
+                  ? "Checking..."
+                  : notificationAccess
+                    ? "Enabled"
+                    : "Not enabled"}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.statusDot,
+                {
+                  backgroundColor: notificationAccess
+                    ? colors.income
+                    : colors.expense,
+                },
+              ]}
+            />
+          </View>
+
+          <Text style={styles.notificationDescription}>
+            Android requires notification access so Dhebu can detect bank
+            transaction alerts.
+          </Text>
+
+          <Pressable
+            style={styles.settingsButton}
+            onPress={openNotificationAccessSettings}
+          >
+            <Text style={styles.settingsButtonText}>
+              Open Notification Settings
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Selected apps */}
+
+        <View style={styles.appSourceHeader}>
           <View
             style={{
               flex: 1,
             }}
           >
-            <Text style={styles.rowLabel}>Notification Access</Text>
+            <Text style={styles.sourceTitle}>Transaction Apps</Text>
 
             <Text style={styles.rowSub}>
-              Native notification listener is being configured.
+              Only selected apps are processed by Dhebu.
             </Text>
           </View>
+
+          <Pressable
+            style={styles.chooseAppsButton}
+            onPress={() => {
+              setAppSearch("");
+              setAppSelectorVisible(true);
+            }}
+          >
+            <Text style={styles.chooseAppsText}>Choose Apps</Text>
+          </Pressable>
         </View>
 
-        {/* APPROVED APPS */}
-
-        {notificationApps.length > 0 && (
-          <>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  marginTop: Spacing.four,
-                },
-              ]}
-            >
-              Approved Apps
+        {loadingApps ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : selectedApps.length === 0 ? (
+          <View style={styles.emptyAppsCard}>
+            <Text style={styles.emptyAppsTitle}>
+              No transaction apps selected
             </Text>
 
-            {notificationApps.map((app) => (
-              <View key={app.package_name} style={styles.row}>
-                <View
-                  style={{
-                    flex: 1,
-                  }}
-                >
-                  <Text style={styles.rowLabel}>{app.app_label}</Text>
-
-                  <Text style={styles.rowSub} numberOfLines={1}>
-                    {app.package_name}
-                  </Text>
-                </View>
-
-                <Switch
-                  value={app.enabled === 1}
-                  onValueChange={() => toggleApp(app.package_name, app.enabled)}
-                  trackColor={{
-                    true: colors.primary,
-                  }}
-                />
+            <Text style={styles.rowSub}>
+              Choose your SMS, banking or wallet apps. Other notifications will
+              be rejected immediately by Android.
+            </Text>
+          </View>
+        ) : (
+          selectedApps.map((app) => (
+            <View key={app.packageName} style={styles.selectedAppRow}>
+              <View style={styles.appInitial}>
+                <Text style={styles.appInitialText}>
+                  {app.appLabel.charAt(0).toUpperCase()}
+                </Text>
               </View>
-            ))}
-          </>
+
+              <View
+                style={{
+                  flex: 1,
+                }}
+              >
+                <Text style={styles.rowLabel}>{app.appLabel}</Text>
+
+                <Text style={styles.packageText} numberOfLines={1}>
+                  {app.packageName}
+                </Text>
+              </View>
+
+              <Switch
+                value={true}
+                disabled={savingPackage === app.packageName}
+                onValueChange={() => toggleNotificationApp(app)}
+                trackColor={{
+                  true: colors.primary,
+                }}
+              />
+            </View>
+          ))
         )}
 
-        {/* DEBUG */}
+        {/* Debug */}
 
         <Text
           style={[
@@ -778,6 +992,96 @@ export default function ProfileScreen() {
           onSubmit={handleRenameSubmit}
         />
       </ScrollView>
+
+      {/* ============================
+          APP SELECTOR MODAL
+         ============================ */}
+
+      <Modal
+        visible={appSelectorVisible}
+        animationType="slide"
+        onRequestClose={() => setAppSelectorVisible(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View
+              style={{
+                flex: 1,
+              }}
+            >
+              <Text style={styles.modalTitle}>Choose Transaction Apps</Text>
+
+              <Text style={styles.rowSub}>
+                Dhebu will process notifications only from apps you enable here.
+              </Text>
+            </View>
+
+            <Pressable onPress={() => setAppSelectorVisible(false)}>
+              <Text style={styles.doneText}>Done</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.searchWrapper}>
+            <TextInput
+              style={styles.searchInput}
+              value={appSearch}
+              onChangeText={setAppSearch}
+              placeholder="Search Messages, eSewa, bank..."
+              placeholderTextColor={colors.muted}
+              autoCorrect={false}
+            />
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.appList}
+            keyboardShouldPersistTaps="handled"
+          >
+            {filteredInstalledApps.map((app) => {
+              const enabled = allowedPackages.includes(app.packageName);
+
+              const saving = savingPackage === app.packageName;
+
+              return (
+                <View key={app.packageName} style={styles.appRow}>
+                  <View style={styles.appInitial}>
+                    <Text style={styles.appInitialText}>
+                      {app.appLabel.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    <Text style={styles.rowLabel}>{app.appLabel}</Text>
+
+                    <Text style={styles.packageText} numberOfLines={1}>
+                      {app.packageName}
+                    </Text>
+                  </View>
+
+                  {saving ? (
+                    <ActivityIndicator color={colors.primary} />
+                  ) : (
+                    <Switch
+                      value={enabled}
+                      onValueChange={() => toggleNotificationApp(app)}
+                      trackColor={{
+                        true: colors.primary,
+                      }}
+                    />
+                  )}
+                </View>
+              );
+            })}
+
+            {filteredInstalledApps.length === 0 && (
+              <Text style={styles.noResults}>No apps found.</Text>
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -791,7 +1095,6 @@ function StatCard({
   label: string;
   value: string;
   color: string;
-
   styles: ReturnType<typeof createStyles>;
 }) {
   return (
@@ -829,11 +1132,8 @@ function createStyles(colors: ColorScheme) {
 
     heading: {
       fontFamily: Fonts.bold,
-
       fontSize: 24,
-
       color: colors.ink,
-
       marginTop: Spacing.three,
     },
 
@@ -863,7 +1163,6 @@ function createStyles(colors: ColorScheme) {
 
     identityAvatar: {
       width: 64,
-
       height: 64,
 
       borderRadius: Radii.pill,
@@ -1162,6 +1461,290 @@ function createStyles(colors: ColorScheme) {
 
       borderColor: colors.border,
     },
+
+    /*
+     * Notification settings
+     */
+
+    notificationCard: {
+      backgroundColor: colors.surface,
+
+      borderRadius: Radii.large,
+
+      borderWidth: 1,
+
+      borderColor: colors.border,
+
+      padding: Spacing.four,
+    },
+
+    notificationHeader: {
+      flexDirection: "row",
+
+      alignItems: "center",
+    },
+
+    notificationDescription: {
+      fontFamily: Fonts.regular,
+
+      fontSize: 12,
+
+      lineHeight: 18,
+
+      color: colors.muted,
+
+      marginTop: Spacing.three,
+    },
+
+    statusDot: {
+      width: 10,
+      height: 10,
+
+      borderRadius: 5,
+
+      marginLeft: Spacing.two,
+    },
+
+    settingsButton: {
+      marginTop: Spacing.three,
+
+      alignSelf: "flex-start",
+
+      paddingHorizontal: Spacing.three,
+
+      paddingVertical: Spacing.two,
+
+      borderRadius: Radii.medium,
+
+      backgroundColor: colors.background,
+
+      borderWidth: 1,
+
+      borderColor: colors.border,
+    },
+
+    settingsButtonText: {
+      fontFamily: Fonts.semiBold,
+
+      fontSize: 12,
+
+      color: colors.primary,
+    },
+
+    appSourceHeader: {
+      flexDirection: "row",
+
+      alignItems: "center",
+
+      gap: Spacing.three,
+
+      marginTop: Spacing.four,
+
+      marginBottom: Spacing.two,
+    },
+
+    sourceTitle: {
+      fontFamily: Fonts.semiBold,
+
+      fontSize: 15,
+
+      color: colors.ink,
+    },
+
+    chooseAppsButton: {
+      paddingHorizontal: Spacing.three,
+
+      paddingVertical: Spacing.two,
+
+      borderRadius: Radii.medium,
+
+      backgroundColor: colors.primary,
+    },
+
+    chooseAppsText: {
+      fontFamily: Fonts.semiBold,
+
+      fontSize: 12,
+
+      color: colors.white,
+    },
+
+    loadingRow: {
+      paddingVertical: Spacing.four,
+
+      alignItems: "center",
+    },
+
+    emptyAppsCard: {
+      backgroundColor: colors.surface,
+
+      padding: Spacing.four,
+
+      borderRadius: Radii.medium,
+
+      borderWidth: 1,
+
+      borderColor: colors.border,
+    },
+
+    emptyAppsTitle: {
+      fontFamily: Fonts.semiBold,
+
+      fontSize: 14,
+
+      color: colors.ink,
+
+      marginBottom: Spacing.one,
+    },
+
+    selectedAppRow: {
+      flexDirection: "row",
+
+      alignItems: "center",
+
+      gap: Spacing.three,
+
+      paddingVertical: Spacing.three,
+
+      borderBottomWidth: StyleSheet.hairlineWidth,
+
+      borderBottomColor: colors.border,
+    },
+
+    appInitial: {
+      width: 38,
+      height: 38,
+
+      borderRadius: Radii.medium,
+
+      alignItems: "center",
+
+      justifyContent: "center",
+
+      backgroundColor: colors.surface,
+
+      borderWidth: 1,
+
+      borderColor: colors.border,
+    },
+
+    appInitialText: {
+      fontFamily: Fonts.bold,
+
+      fontSize: 15,
+
+      color: colors.primary,
+    },
+
+    packageText: {
+      fontFamily: Fonts.regular,
+
+      fontSize: 10,
+
+      color: colors.muted,
+
+      marginTop: 2,
+    },
+
+    /*
+     * Modal
+     */
+
+    modalContainer: {
+      flex: 1,
+
+      backgroundColor: colors.background,
+    },
+
+    modalHeader: {
+      flexDirection: "row",
+
+      alignItems: "center",
+
+      paddingHorizontal: Spacing.four,
+
+      paddingTop: Spacing.three,
+
+      paddingBottom: Spacing.three,
+
+      borderBottomWidth: StyleSheet.hairlineWidth,
+
+      borderBottomColor: colors.border,
+
+      gap: Spacing.three,
+    },
+
+    modalTitle: {
+      fontFamily: Fonts.bold,
+
+      fontSize: 20,
+
+      color: colors.ink,
+    },
+
+    doneText: {
+      fontFamily: Fonts.semiBold,
+
+      color: colors.primary,
+    },
+
+    searchWrapper: {
+      paddingHorizontal: Spacing.four,
+
+      paddingVertical: Spacing.three,
+    },
+
+    searchInput: {
+      borderWidth: 1,
+
+      borderColor: colors.border,
+
+      backgroundColor: colors.surface,
+
+      color: colors.ink,
+
+      borderRadius: Radii.medium,
+
+      paddingHorizontal: Spacing.three,
+
+      paddingVertical: Spacing.three,
+
+      fontFamily: Fonts.regular,
+    },
+
+    appList: {
+      paddingHorizontal: Spacing.four,
+
+      paddingBottom: Spacing.six,
+    },
+
+    appRow: {
+      flexDirection: "row",
+
+      alignItems: "center",
+
+      gap: Spacing.three,
+
+      paddingVertical: Spacing.three,
+
+      borderBottomWidth: StyleSheet.hairlineWidth,
+
+      borderBottomColor: colors.border,
+    },
+
+    noResults: {
+      fontFamily: Fonts.regular,
+
+      color: colors.muted,
+
+      textAlign: "center",
+
+      paddingVertical: Spacing.six,
+    },
+
+    /*
+     * Debug
+     */
 
     debugRow: {
       flexDirection: "row",

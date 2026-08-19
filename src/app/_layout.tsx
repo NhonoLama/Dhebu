@@ -5,6 +5,12 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 
+import {
+  addNotificationListener,
+  getInstalledApps,
+  type DhebuNotificationEvent,
+} from "@/modules/dhebu-notifications";
+
 import { useFonts } from "expo-font";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -14,11 +20,6 @@ import { ActivityIndicator, View } from "react-native";
 import { Colors } from "@/constants/theme";
 
 import { handleNotificationEvent } from "@/tasks/notification-task";
-
-import {
-  addNotificationListener,
-  type DhebuNotificationEvent,
-} from "@/modules/dhebu-notifications";
 
 import { getUserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
@@ -113,6 +114,18 @@ export default function RootLayout() {
       console.log("DHEBU: removing notification listener");
       subscription.remove();
     };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const apps = await getInstalledApps();
+
+        console.log("DHEBU INSTALLED APPS:", apps);
+      } catch (error) {
+        console.error("DHEBU: failed to load installed apps", error);
+      }
+    })();
   }, []);
 
   /*

@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { EmojiPicker } from "@/components/emoji-picker";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import { createUserProfile } from "@/repositories/user-profile.repo";
 import { useTheme } from "@/theme/theme-context";
@@ -24,7 +23,6 @@ export default function OnboardingScreen() {
 
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState("NPR");
-  const [avatarEmoji, setAvatarEmoji] = useState("🙂");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleGetStarted() {
@@ -34,7 +32,11 @@ export default function OnboardingScreen() {
     }
     setSubmitting(true);
     try {
-      await createUserProfile({ name: name.trim(), currency, avatarEmoji });
+      await createUserProfile({
+        name,
+        currency,
+        avatarId: "avatar_01",
+      });
       router.replace("/(tabs)");
     } catch {
       Alert.alert("Error", "Could not save your profile. Try again.");
@@ -53,12 +55,6 @@ export default function OnboardingScreen() {
         <Text style={styles.subheading}>
           Let's set up your profile — this stays on your device.
         </Text>
-
-        <Text style={styles.label}>Your Avatar</Text>
-        <View style={styles.avatarPreview}>
-          <Text style={styles.avatarPreviewEmoji}>{avatarEmoji}</Text>
-        </View>
-        <EmojiPicker value={avatarEmoji} onChange={setAvatarEmoji} />
 
         <Text style={styles.label}>Your Name</Text>
         <TextInput
@@ -134,17 +130,6 @@ function createStyles(colors: ColorScheme) {
       marginBottom: Spacing.two,
       marginTop: Spacing.four,
     },
-    avatarPreview: {
-      width: 72,
-      height: 72,
-      borderRadius: Radii.pill,
-      backgroundColor: colors.surface,
-      alignItems: "center",
-      justifyContent: "center",
-      alignSelf: "center",
-      marginBottom: Spacing.three,
-    },
-    avatarPreviewEmoji: { fontSize: 36 },
     input: {
       borderWidth: 1,
       borderColor: colors.border,

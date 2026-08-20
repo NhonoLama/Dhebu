@@ -1,7 +1,16 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { getAvatarSource } from "@/constants/avatars";
 
 import { PendingReviewModal } from "@/components/pending-review-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
@@ -102,9 +111,11 @@ export default function DashboardScreen() {
           style={styles.avatar}
           onPress={() => router.push("/(tabs)/profile")}
         >
-          <Text style={styles.avatarEmoji}>
-            {profile?.avatar_emoji ?? "🙂"}
-          </Text>
+          <Image
+            source={getAvatarSource(profile?.avatar_id)}
+            style={styles.avatarImage}
+            resizeMode="cover"
+          />
         </Pressable>
       </View>
 
@@ -350,12 +361,19 @@ function createStyles(colors: ColorScheme, shadows: { soft: object }) {
     avatar: {
       width: 44,
       height: 44,
-      borderRadius: Radii.pill,
+      borderRadius: 22,
       backgroundColor: colors.surface,
       alignItems: "center",
       justifyContent: "center",
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    avatarEmoji: { fontSize: 22 },
+
+    avatarImage: {
+      width: "100%",
+      height: "100%",
+    },
     pendingBanner: {
       backgroundColor: colors.primary,
       borderRadius: Radii.medium,

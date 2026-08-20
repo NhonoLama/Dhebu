@@ -16,6 +16,7 @@ async function isApprovedSource(
 ): Promise<boolean> {
   if (!packageName) {
     console.log("DHEBU PIPELINE: empty package name");
+
     return false;
   }
 
@@ -31,10 +32,12 @@ async function isApprovedSource(
     app_label: string;
   }>(
     `
-      SELECT enabled, app_label
-      FROM notification_apps
-      WHERE package_name = ?;
-    `,
+        SELECT
+          enabled,
+          app_label
+        FROM notification_apps
+        WHERE package_name = ?;
+      `,
     [packageName],
   );
 
@@ -59,6 +62,12 @@ async function isApprovedSource(
     return existing.enabled === 1;
   }
 
+  /*
+   * This should normally not happen now because
+   * Profile synchronizes selected apps into SQLite.
+   *
+   * Keep the fallback for safety.
+   */
   await db.runAsync(
     `
       INSERT INTO notification_apps (
@@ -84,15 +93,25 @@ async function isApprovedSource(
 
 export async function handleNotificationEvent(
   event: RawNotificationEvent,
-): Promise<void> {
+): Promise<boolean> {
   console.log("DHEBU PIPELINE: handleNotificationEvent started", event);
 
   try {
+    /*
+     * Invalid notification.
+     *
+     * There is nothing useful to retry,
+     * so consider it handled.
+     */
     if (!event.app || typeof event.app !== "string") {
       console.log("DHEBU PIPELINE: invalid app package");
-      return;
+
+      return true;
     }
 
+    /*
+     * Check app approval.
+     */
     const approved = await isApprovedSource(
       event.app,
       event.appLabel ?? event.app,
@@ -100,19 +119,29 @@ export async function handleNotificationEvent(
 
     console.log("DHEBU PIPELINE: source approved?", approved);
 
+    /*
+     * If deliberately not approved, there is
+     * no reason to keep retrying this notification.
+     */
     if (!approved) {
       console.log("DHEBU PIPELINE: ignored because source is not approved", {
         app: event.app,
         appLabel: event.appLabel,
       });
 
-      return;
+      return true;
     }
 
+    /*
+     * Load categories.
+     */
     const categories = await getAllCategories();
 
     console.log("DHEBU PIPELINE: categories loaded", categories.length);
 
+    /*
+     * Parse notification.
+     */
     const parsed = parseNotification(
       event.title ?? "",
       event.text ?? "",
@@ -127,12 +156,21 @@ export async function handleNotificationEvent(
       parsed,
     });
 
+    /*
+     * No amount means it isn't a transaction.
+     *
+     * That is still a successful processing result,
+     * so remove it from the native queue.
+     */
     if (parsed.amount === null) {
       console.log("DHEBU PIPELINE: no amount detected, ignoring notification");
 
-      return;
+      return true;
     }
 
+    /*
+     * Save pending transaction.
+     */
     const created = await createPendingTransaction({
       raw_title: event.title ?? null,
 
@@ -157,7 +195,19 @@ export async function handleNotificationEvent(
       remarks: parsed.remarks,
       source: event.app,
     });
+
+    /*
+     * Everything completed successfully.
+     */
+    return true;
   } catch (error) {
     console.error("DHEBU PIPELINE ERROR:", error);
+
+    /*
+     * Keep the native queued copy.
+     *
+     * We'll retry it when Dhebu opens/resumes.
+     */
+    return false;
   }
 }

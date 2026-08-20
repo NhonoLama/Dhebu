@@ -7,15 +7,17 @@ import {
 
 import {
   addNotificationListener,
-  getInstalledApps,
+  getQueuedNotifications,
+  removeQueuedNotification,
   type DhebuNotificationEvent,
+  type DhebuQueuedNotification,
 } from "@/modules/dhebu-notifications";
 
 import { useFonts } from "expo-font";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, AppState, View } from "react-native";
 
 import { Colors } from "@/constants/theme";
 
@@ -43,6 +45,94 @@ export default function RootLayout() {
     Poppins_700Bold,
   });
 
+  async function processNotification(
+    event: DhebuNotificationEvent | DhebuQueuedNotification,
+  ) {
+    const now = Date.now();
+
+    const dedupeKey = [
+      event.app,
+      event.title,
+      event.text,
+      event.bigText,
+      event.subText,
+    ]
+      .map((value) => value?.trim().toLowerCase() ?? "")
+      .join("|");
+
+    const previousTime = recentNotificationKeysRef.current.get(dedupeKey);
+
+    if (previousTime !== undefined && now - previousTime < 1500) {
+      console.log("DHEBU: duplicate notification ignored", {
+        app: event.app,
+        title: event.title,
+        dedupeKey,
+      });
+
+      if (event.queueId) {
+        await removeQueuedNotification(event.queueId);
+      }
+
+      return;
+    }
+
+    recentNotificationKeysRef.current.set(dedupeKey, now);
+
+    for (const [key, timestamp] of recentNotificationKeysRef.current) {
+      if (now - timestamp > 30000) {
+        recentNotificationKeysRef.current.delete(key);
+      }
+    }
+
+    const bestText = event.bigText?.trim() || event.text?.trim() || "";
+
+    console.log("DHEBU: processing notification", {
+      queueId: event.queueId,
+      app: event.app,
+      appLabel: event.appLabel,
+      title: event.title,
+      text: bestText,
+    });
+
+    const handled = await handleNotificationEvent({
+      app: event.app,
+      appLabel: event.appLabel,
+      title: event.title ?? "",
+      text: bestText,
+    });
+
+    if (handled && event.queueId) {
+      const removed = await removeQueuedNotification(event.queueId);
+
+      console.log("DHEBU: native queue acknowledged", {
+        queueId: event.queueId,
+        removed,
+      });
+    }
+
+    if (!handled) {
+      console.log("DHEBU: notification kept in native queue for retry", {
+        queueId: event.queueId,
+      });
+    }
+  }
+
+  async function drainNativeNotificationQueue() {
+    try {
+      const queued = await getQueuedNotifications();
+
+      console.log("DHEBU: draining native queue", {
+        count: queued.length,
+      });
+
+      for (const event of queued) {
+        await processNotification(event);
+      }
+    } catch (error) {
+      console.error("DHEBU: failed draining native notification queue", error);
+    }
+  }
+
   /*
    * Native Android notification pipeline.
    *
@@ -53,79 +143,42 @@ export default function RootLayout() {
   useEffect(() => {
     console.log("DHEBU: registering notification listener");
 
+    /*
+     * Process notifications that Android may have
+     * saved before the JavaScript runtime became ready.
+     */
+    void drainNativeNotificationQueue();
+
+    /*
+     * Receive new live notifications while JS is active.
+     */
     const subscription = addNotificationListener(
       (event: DhebuNotificationEvent) => {
-        const now = Date.now();
-
-        const dedupeKey = [
-          event.app,
-          event.title,
-          event.text,
-          event.bigText,
-          event.subText,
-        ]
-          .map((value) => value?.trim().toLowerCase() ?? "")
-          .join("|");
-
-        const previousTime = recentNotificationKeysRef.current.get(dedupeKey);
-
-        if (previousTime !== undefined && now - previousTime < 5000) {
-          console.log("DHEBU: duplicate notification ignored", {
-            app: event.app,
-            title: event.title,
-            dedupeKey,
-          });
-
-          return;
-        }
-
-        recentNotificationKeysRef.current.set(dedupeKey, now);
-
-        for (const [key, timestamp] of recentNotificationKeysRef.current) {
-          if (now - timestamp > 30000) {
-            recentNotificationKeysRef.current.delete(key);
-          }
-        }
-
-        console.log("DHEBU UNIQUE NOTIFICATION:", event);
-
-        const bestText = event.bigText?.trim() || event.text?.trim() || "";
-
-        console.log(
-          "DHEBU: forwarding unique notification to transaction pipeline",
-          {
-            app: event.app,
-            appLabel: event.appLabel,
-            title: event.title,
-            text: bestText,
-          },
-        );
-
-        void handleNotificationEvent({
-          app: event.app,
-          appLabel: event.appLabel,
-          title: event.title ?? "",
-          text: bestText,
-        });
+        void processNotification(event);
       },
     );
 
     return () => {
       console.log("DHEBU: removing notification listener");
+
       subscription.remove();
     };
   }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const apps = await getInstalledApps();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        console.log(
+          "DHEBU: app became active, checking native notification queue",
+        );
 
-        console.log("DHEBU INSTALLED APPS:", apps);
-      } catch (error) {
-        console.error("DHEBU: failed to load installed apps", error);
+        void drainNativeNotificationQueue();
       }
-    })();
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   /*

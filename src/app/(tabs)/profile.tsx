@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   AppState,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -17,8 +18,9 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { EmojiPicker } from "@/components/emoji-picker";
+import { AvatarPicker } from "@/components/avatar-picker";
 import { RenameModal } from "@/components/rename-modal";
+import { getAvatarSource, type AvatarId } from "@/constants/avatars";
 
 import {
   ColorScheme,
@@ -55,7 +57,6 @@ import {
 } from "@/repositories/user-profile.repo";
 
 import { useLedgerStore } from "@/stores/useLedgerStore";
-import { handleNotificationEvent } from "@/tasks/notification-task";
 import { ThemeMode, useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
 import { formatDisplayDate } from "@/utils/date";
@@ -135,6 +136,8 @@ export default function ProfileScreen() {
   );
 
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
+
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
 
   /*
    * ============================
@@ -364,86 +367,14 @@ export default function ProfileScreen() {
     setEditingName(false);
   }
 
-  async function handleChangeAvatar(emoji: string) {
+  async function handleChangeAvatar(avatarId: AvatarId) {
     await updateUserProfile({
-      avatarEmoji: emoji,
+      avatarId,
     });
 
     const updated = await getUserProfile();
 
     setProfile(updated);
-  }
-
-  /*
-   * ============================
-   * DEBUG TRANSACTIONS
-   * ============================
-   */
-
-  const TEST_NOTIFICATIONS = [
-    {
-      label: "Debit (Dr)",
-      title: "Prabhu Bank",
-      text: "AC#024XX5991 Dr by NPR 1000 on 09Aug26 09:43:29 - 14047889dqhs,petroll",
-    },
-
-    {
-      label: "Credit (Cr)",
-      title: "Prabhu Bank",
-      text: "AC#024XX5991 Cr by NPR 29300 on 07Aug26 18:35:25 - CIPSDAWA LAMA LAMA#H",
-    },
-
-    {
-      label: "Withdrawn",
-      title: "Prabhu Bank",
-      text: "Dear DAWA, NPR 800.00 has been withdrawn from your A/C 257###18 on 07/08/2026 19:42:30. Rmk: Load eSewa,UPI-192128507, Thank You ! Prabhu Bank",
-    },
-
-    {
-      label: "Deposited",
-      title: "Prabhu Bank",
-      text: "Dear DAWA, NPR 20,000.00 has been deposited in your A/C 257###18 on 29/07/2026 09:18:35. Rmk: IntraBnk,suppliers,986941 Thank You ! Prabhu Bank",
-    },
-  ];
-
-  async function handleSimulateNotification(
-    sample: (typeof TEST_NOTIFICATIONS)[number],
-  ) {
-    const db = await getDb();
-
-    await db.runAsync(
-      `
-      INSERT INTO notification_apps (
-        package_name,
-        app_label,
-        enabled
-      )
-      VALUES (
-        'com.dhebu.debug.testbank',
-        'Test Bank (Debug)',
-        1
-      )
-
-      ON CONFLICT(package_name)
-      DO UPDATE SET
-        enabled = 1;
-      `,
-    );
-
-    await handleNotificationEvent({
-      app: "com.dhebu.debug.testbank",
-
-      appLabel: "Test Bank (Debug)",
-
-      title: sample.title,
-
-      text: sample.text,
-    });
-
-    Alert.alert(
-      "Test notification simulated",
-      "Check the Dashboard banner to review the detected transaction.",
-    );
   }
 
   /*
@@ -564,11 +495,20 @@ export default function ProfileScreen() {
         </Text>
 
         <View style={styles.identityCard}>
-          <View style={styles.identityAvatar}>
-            <Text style={styles.identityEmoji}>
-              {profile?.avatar_emoji ?? "🙂"}
-            </Text>
-          </View>
+          <Pressable
+            style={styles.identityAvatar}
+            onPress={() => setAvatarPickerVisible(true)}
+          >
+            <Image
+              source={getAvatarSource(profile?.avatar_id)}
+              style={styles.identityAvatarImage}
+              resizeMode="contain"
+            />
+
+            <View style={styles.avatarEditBadge}>
+              <Text style={styles.avatarEditBadgeText}>✎</Text>
+            </View>
+          </Pressable>
 
           {editingName ? (
             <View style={styles.nameEditRow}>
@@ -590,9 +530,10 @@ export default function ProfileScreen() {
               <Text style={styles.identityHint}>tap to edit name</Text>
             </Pressable>
           )}
-
-          <EmojiPicker
-            value={profile?.avatar_emoji ?? "🙂"}
+          <AvatarPicker
+            visible={avatarPickerVisible}
+            value={profile?.avatar_id ?? "avatar_01"}
+            onClose={() => setAvatarPickerVisible(false)}
             onChange={handleChangeAvatar}
           />
         </View>
@@ -951,35 +892,6 @@ export default function ProfileScreen() {
           ))
         )}
 
-        {/* Debug */}
-
-        <Text
-          style={[
-            styles.sectionTitle,
-            {
-              marginTop: Spacing.four,
-            },
-          ]}
-        >
-          Debug: Simulate Notification
-        </Text>
-
-        <Text style={styles.rowSub}>
-          Tests the parser directly, bypassing Android's notification system.
-        </Text>
-
-        <View style={styles.debugRow}>
-          {TEST_NOTIFICATIONS.map((sample) => (
-            <Pressable
-              key={sample.label}
-              style={styles.debugChip}
-              onPress={() => handleSimulateNotification(sample)}
-            >
-              <Text style={styles.debugChipText}>{sample.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
         <RenameModal
           visible={editTarget !== null}
           title={
@@ -1162,8 +1074,8 @@ function createStyles(colors: ColorScheme) {
     },
 
     identityAvatar: {
-      width: 64,
-      height: 64,
+      width: 72,
+      height: 72,
 
       borderRadius: Radii.pill,
 
@@ -1176,8 +1088,34 @@ function createStyles(colors: ColorScheme) {
       marginBottom: Spacing.two,
     },
 
-    identityEmoji: {
-      fontSize: 32,
+    identityAvatarImage: {
+      width: 56,
+      height: 56,
+    },
+
+    avatarEditBadge: {
+      position: "absolute",
+      right: -2,
+      bottom: -2,
+
+      width: 22,
+      height: 22,
+
+      borderRadius: 11,
+
+      backgroundColor: colors.primary,
+
+      alignItems: "center",
+      justifyContent: "center",
+
+      borderWidth: 2,
+      borderColor: colors.surface,
+    },
+
+    avatarEditBadgeText: {
+      color: colors.white,
+      fontFamily: Fonts.bold,
+      fontSize: 11,
     },
 
     identityName: {
@@ -1740,42 +1678,6 @@ function createStyles(colors: ColorScheme) {
       textAlign: "center",
 
       paddingVertical: Spacing.six,
-    },
-
-    /*
-     * Debug
-     */
-
-    debugRow: {
-      flexDirection: "row",
-
-      flexWrap: "wrap",
-
-      gap: Spacing.two,
-
-      marginTop: Spacing.two,
-    },
-
-    debugChip: {
-      paddingHorizontal: Spacing.three,
-
-      paddingVertical: Spacing.two,
-
-      borderRadius: Radii.pill,
-
-      backgroundColor: colors.surface,
-
-      borderWidth: 1,
-
-      borderColor: colors.primary,
-    },
-
-    debugChipText: {
-      fontFamily: Fonts.medium,
-
-      fontSize: 12,
-
-      color: colors.primary,
     },
   });
 }

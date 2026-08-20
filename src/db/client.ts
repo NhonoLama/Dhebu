@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -149,7 +149,14 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
     `);
   }
 
-  // Future migrations: `if (version < 7) { ... }` etc.
+  if (version < 7) {
+    await db.execAsync(`
+    ALTER TABLE user_profile
+    ADD COLUMN avatar_id TEXT NOT NULL DEFAULT 'avatar_01';
+  `);
+  }
+
+  // Future migrations: `if (version < 8) { ... }` etc.
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_VERSION};`);
 }

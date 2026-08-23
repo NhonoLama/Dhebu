@@ -103,6 +103,7 @@ export default function RootLayout() {
       appLabel: event.appLabel,
       title: event.title ?? "",
       text: bestText,
+      postedAt: event.postedAt,
     });
 
     if (handled && event.queueId) {

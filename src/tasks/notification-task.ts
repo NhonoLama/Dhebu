@@ -8,6 +8,7 @@ interface RawNotificationEvent {
   appLabel?: string;
   title: string;
   text: string;
+  postedAt?: number;
 }
 
 async function isApprovedSource(
@@ -209,6 +210,9 @@ export async function handleNotificationEvent(
       detected_category_id: parsed.categoryId,
 
       remarks: parsed.remarks,
+
+      notification_posted_at:
+        typeof event.postedAt === "number" ? event.postedAt : null,
     });
 
     if (__DEV__) {

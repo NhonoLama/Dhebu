@@ -14,12 +14,11 @@ import type { ColorScheme } from "@/constants/theme";
 import { Fonts, Radii, Spacing } from "@/constants/theme";
 import type { TransactionType } from "@/db/types";
 import {
+  confirmPendingTransaction,
   getPendingTransactions,
-  markPendingConfirmed,
   markPendingDismissed,
   type PendingTransaction,
 } from "@/repositories/pending-transactions.repo";
-import { createTransaction } from "@/repositories/transactions.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
 import { useTheme } from "@/theme/theme-context";
 import { formatCurrency, parseAmountInput } from "@/utils/currency";
@@ -77,29 +76,52 @@ export function PendingReviewModal({
 
   async function handleConfirm(item: PendingTransaction) {
     const accountId = accounts[0]?.id;
+
     const categoryId = categoryEdits[item.id];
+
     const amount = parseAmountInput(amountEdits[item.id] ?? "");
+
     const type = typeEdits[item.id];
 
     if (!accountId || !categoryId || !amount) {
-      return; // Button is disabled in this case — see render logic below.
+      return;
     }
 
-    await createTransaction({
+    const transactionId = await confirmPendingTransaction({
+      pendingId: item.id,
+
       account_id: accountId,
+
       category_id: categoryId,
+
       type,
+
       amount,
+
       note: item.remarks ?? undefined,
-      date: toIsoDate(new Date()),
+
+      date: toIsoDate(
+        item.notification_posted_at
+          ? new Date(item.notification_posted_at)
+          : new Date(item.created_at),
+      ),
     });
-    await markPendingConfirmed(item.id);
-    load();
+
+    /*
+     * null means the pending item was already
+     * handled or no longer exists.
+     */
+    if (transactionId === null) {
+      await load();
+      return;
+    }
+
+    await load();
   }
 
   async function handleDismiss(item: PendingTransaction) {
     await markPendingDismissed(item.id);
-    load();
+    await load();
   }
 
   return (
@@ -135,9 +157,23 @@ export function PendingReviewModal({
                   {(["expense", "income"] as const).map((t) => (
                     <Pressable
                       key={t}
-                      onPress={() =>
-                        setTypeEdits((prev) => ({ ...prev, [item.id]: t }))
-                      }
+                      onPress={() => {
+                        const currentType = typeEdits[item.id];
+
+                        if (currentType === t) {
+                          return;
+                        }
+
+                        setTypeEdits((prev) => ({
+                          ...prev,
+                          [item.id]: t,
+                        }));
+
+                        setCategoryEdits((prev) => ({
+                          ...prev,
+                          [item.id]: null,
+                        }));
+                      }}
                       style={[
                         styles.typeChip,
                         typeEdits[item.id] === t && {

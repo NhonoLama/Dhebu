@@ -27,7 +27,7 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   return db;
 }
 
-const CURRENT_VERSION = 7;
+const CURRENT_VERSION = 8;
 
 async function runMigrations(db: SQLite.SQLiteDatabase) {
   const result = await db.getFirstAsync<{ user_version: number }>(
@@ -130,6 +130,7 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
         detected_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
         remarks TEXT,
         status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','dismissed')),
+        notification_posted_at INTEGER,
         created_at TEXT NOT NULL
       );
 
@@ -156,7 +157,14 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
   `);
   }
 
-  // Future migrations: `if (version < 8) { ... }` etc.
+  if (version < 8) {
+    await db.execAsync(`
+    ALTER TABLE pending_transactions
+    ADD COLUMN notification_posted_at INTEGER;
+  `);
+  }
+
+  // Future migrations: `if (version < 9) { ... }` etc.
 
   await db.execAsync(`PRAGMA user_version = ${CURRENT_VERSION};`);
 }

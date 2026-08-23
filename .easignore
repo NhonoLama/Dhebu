@@ -46,3 +46,15 @@ example
 /build-error.txt
 /build.log
 /stacktrace.log
+
+# Generated Android and local module output
+/android/build/
+/android/.gradle/
+/android/app/build/
+/android/app/.cxx/
+/modules/*/android/build/
+/modules/*/android/.gradle/
+
+/build-error.txt
+/build.log
+/stacktrace.log

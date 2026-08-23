@@ -129,8 +129,18 @@ export function PendingReviewModal({
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.heading}>Review Detected Transactions</Text>
-          <Pressable onPress={onClose}>
-            <Text style={styles.closeText}>Close</Text>
+
+          <Pressable
+            onPress={onClose}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && { opacity: 0.6 },
+            ]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close transaction review"
+          >
+            <Text style={styles.closeText}>×</Text>
           </Pressable>
         </View>
 
@@ -274,20 +284,40 @@ export function PendingReviewModal({
 
 function createStyles(colors: ColorScheme) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingTop: 50 },
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+      paddingTop: 50,
+      paddingHorizontal: Spacing.four,
+    },
     header: {
       flexDirection: "row",
+      alignItems: "flex-start",
       justifyContent: "space-between",
-      alignItems: "center",
-      paddingHorizontal: Spacing.four,
-      marginBottom: Spacing.four,
+      gap: Spacing.three,
     },
-    heading: { fontFamily: Fonts.bold, fontSize: 20, color: colors.ink },
-    closeText: { fontFamily: Fonts.semiBold, color: colors.primary },
-    scroll: {
-      paddingHorizontal: Spacing.four,
-      paddingBottom: Spacing.six,
-      gap: Spacing.four,
+
+    heading: {
+      flex: 1,
+      fontFamily: Fonts.bold,
+      fontSize: 20,
+      color: colors.ink,
+    },
+
+    closeButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: -5,
+    },
+
+    closeText: {
+      fontFamily: Fonts.regular,
+      fontSize: 32,
+      lineHeight: 34,
+      color: colors.ink,
     },
     empty: {
       fontFamily: Fonts.regular,

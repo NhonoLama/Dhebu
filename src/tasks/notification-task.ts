@@ -11,6 +11,61 @@ interface RawNotificationEvent {
   postedAt?: number;
 }
 
+/**
+ * Prevent invalid notification titles such as
+ * "https", "http", URLs, or empty values from
+ * appearing as the transaction title.
+ */
+function sanitizeNotificationTitle(
+  title: string | undefined,
+  appLabel: string | undefined,
+): string {
+  const originalTitle = typeof title === "string" ? title : "";
+
+  const cleanedTitle = originalTitle
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\b(?:https?|www)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const invalidTitles = new Set([
+    "",
+    "http",
+    "https",
+    "http:",
+    "https:",
+    "www",
+    "www.",
+  ]);
+
+  if (
+    cleanedTitle.length >= 2 &&
+    !invalidTitles.has(cleanedTitle.toLowerCase())
+  ) {
+    return cleanedTitle;
+  }
+
+  const cleanedAppLabel =
+    typeof appLabel === "string" ? appLabel.replace(/\s+/g, " ").trim() : "";
+
+  /*
+   * Use the readable application name when available.
+   * For example: "Gmail transaction".
+   *
+   * Package names such as com.google.android.gm are
+   * intentionally rejected as user-facing titles.
+   */
+  if (
+    cleanedAppLabel &&
+    !cleanedAppLabel.includes(".") &&
+    !invalidTitles.has(cleanedAppLabel.toLowerCase())
+  ) {
+    return `${cleanedAppLabel} transaction`;
+  }
+
+  return "Email transaction";
+}
+
 async function isApprovedSource(
   packageName: string,
   appLabel: string,
@@ -37,12 +92,12 @@ async function isApprovedSource(
     app_label: string;
   }>(
     `
-        SELECT
-          enabled,
-          app_label
-        FROM notification_apps
-        WHERE package_name = ?;
-      `,
+      SELECT
+        enabled,
+        app_label
+      FROM notification_apps
+      WHERE package_name = ?;
+    `,
     [packageName],
   );
 
@@ -123,7 +178,8 @@ export async function handleNotificationEvent(
     }
 
     /*
-     * Check app approval.
+     * Check whether this notification source
+     * has been enabled by the user.
      */
     const approved = await isApprovedSource(
       event.app,
@@ -159,7 +215,7 @@ export async function handleNotificationEvent(
     }
 
     /*
-     * Parse notification.
+     * Parse the notification content.
      */
     const parsed = parseNotification(
       event.title ?? "",
@@ -173,15 +229,17 @@ export async function handleNotificationEvent(
         appLabel: event.appLabel,
         title: event.title,
         text: event.text,
+        postedAt: event.postedAt,
         parsed,
       });
     }
 
     /*
-     * No amount means it isn't a transaction.
+     * No amount means this notification is not
+     * treated as a financial transaction.
      *
-     * That is still a successful processing result,
-     * so remove it from the native queue.
+     * It is still considered successfully processed,
+     * so it can be removed from the native queue.
      */
     if (parsed.amount === null) {
       if (__DEV__) {
@@ -194,10 +252,27 @@ export async function handleNotificationEvent(
     }
 
     /*
-     * Save pending transaction.
+     * Clean the title before saving it.
+     *
+     * This prevents "https", URLs, or other link
+     * fragments from appearing in the review screen.
+     */
+    const safeTitle = sanitizeNotificationTitle(event.title, event.appLabel);
+
+    if (__DEV__) {
+      console.log("DHEBU: sanitized notification title", {
+        originalTitle: event.title,
+        safeTitle,
+        appLabel: event.appLabel,
+        source: event.app,
+      });
+    }
+
+    /*
+     * Save the detected transaction for review.
      */
     const created = await createPendingTransaction({
-      raw_title: event.title ?? null,
+      raw_title: safeTitle,
 
       raw_text: event.text ?? "",
 
@@ -218,11 +293,14 @@ export async function handleNotificationEvent(
     if (__DEV__) {
       console.log("DHEBU: pending transaction created", {
         result: created,
+        originalTitle: event.title,
+        savedTitle: safeTitle,
         amount: parsed.amount,
         type: parsed.type,
         categoryId: parsed.categoryId,
         remarks: parsed.remarks,
         source: event.app,
+        postedAt: event.postedAt,
       });
     }
 
@@ -236,7 +314,8 @@ export async function handleNotificationEvent(
     /*
      * Keep the native queued copy.
      *
-     * We'll retry it when Dhebu opens/resumes.
+     * It will be retried when Dhebu opens
+     * or resumes.
      */
     return false;
   }

@@ -1,9 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   View,
@@ -15,6 +17,10 @@ import { getAvatarSource } from "@/constants/avatars";
 import { PendingReviewModal } from "@/components/pending-review-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { CategoryBreakdown, PeriodSummary } from "@/db/types";
+import {
+  getQueuedNotifications,
+  removeQueuedNotification,
+} from "@/modules/dhebu-notifications";
 import { getPendingCount } from "@/repositories/pending-transactions.repo";
 import {
   getCategoryBreakdown,
@@ -22,6 +28,7 @@ import {
 } from "@/repositories/transactions.repo";
 import { getUserProfile, UserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import { handleNotificationEvent } from "@/tasks/notification-task";
 import { useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
 import {
@@ -29,6 +36,39 @@ import {
   currentYearRange,
   formatDisplayDate,
 } from "@/utils/date";
+
+async function drainNativeNotificationQueue(): Promise<void> {
+  const queuedNotifications = await getQueuedNotifications();
+
+  if (__DEV__) {
+    console.log("DHEBU: manual refresh draining native queue", {
+      count: queuedNotifications.length,
+    });
+  }
+
+  for (const event of queuedNotifications) {
+    const handled = await handleNotificationEvent({
+      app: event.app,
+      appLabel: event.appLabel,
+      title: event.title ?? "",
+      text: event.bigText?.trim() || event.text?.trim() || "",
+      postedAt: typeof event.postedAt === "number" ? event.postedAt : undefined,
+    });
+
+    if (!handled || !event.queueId) {
+      continue;
+    }
+
+    const removed = await removeQueuedNotification(event.queueId);
+
+    if (__DEV__) {
+      console.log("DHEBU: manual refresh acknowledged native queue item", {
+        queueId: event.queueId,
+        removed,
+      });
+    }
+  }
+}
 
 export default function DashboardScreen() {
   const { colors, shadows } = useTheme();
@@ -38,6 +78,7 @@ export default function DashboardScreen() {
   );
   const summary = useLedgerStore((s) => s.currentPeriodSummary);
   const recent = useLedgerStore((s) => s.recentTransactions);
+  const init = useLedgerStore((s) => s.init);
 
   const [expenseBreakdown, setExpenseBreakdown] = useState<CategoryBreakdown[]>(
     [],
@@ -53,70 +94,117 @@ export default function DashboardScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshInProgressRef = useRef(false);
+
+  const reloadDashboardData = useCallback(async () => {
+    const { start, end } = currentMonthRange();
+    const yearRange = currentYearRange();
+
+    const [count, expense, income, year, userProfile] = await Promise.all([
+      getPendingCount(),
+      getCategoryBreakdown(start, end, "expense"),
+      getCategoryBreakdown(start, end, "income"),
+      getPeriodSummary(yearRange.start, yearRange.end),
+      getUserProfile(),
+      init(),
+    ]);
+
+    setPendingCount(count);
+    setExpenseBreakdown(expense);
+    setIncomeBreakdown(income);
+    setYearSummary(year);
+    setProfile(userProfile);
+  }, [init]);
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshInProgressRef.current) {
+      return;
+    }
+
+    refreshInProgressRef.current = true;
+    setRefreshing(true);
+
+    try {
+      /*
+       * Process native notifications first so any newly created pending
+       * transactions are included when the dashboard reloads from SQLite.
+       */
+      try {
+        await drainNativeNotificationQueue();
+      } catch (error) {
+        console.error("DHEBU: manual native queue refresh failed", error);
+      }
+
+      try {
+        await reloadDashboardData();
+      } catch (error) {
+        console.error("DHEBU: manual dashboard data refresh failed", error);
+      }
+    } finally {
+      refreshInProgressRef.current = false;
+      setRefreshing(false);
+    }
+  }, [reloadDashboardData]);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-
-      (async () => {
-        try {
-          const { start, end } = currentMonthRange();
-          const yearRange = currentYearRange();
-
-          const [count, expense, income, year, userProfile] = await Promise.all(
-            [
-              getPendingCount(),
-              getCategoryBreakdown(start, end, "expense"),
-              getCategoryBreakdown(start, end, "income"),
-              getPeriodSummary(yearRange.start, yearRange.end),
-              getUserProfile(),
-            ],
-          );
-
-          if (!active) {
-            return;
-          }
-
-          setPendingCount(count);
-          setExpenseBreakdown(expense);
-          setIncomeBreakdown(income);
-          setYearSummary(year);
-          setProfile(userProfile);
-        } catch (error) {
-          console.error("DHEBU: failed refreshing dashboard", error);
-        }
-      })();
-
-      return () => {
-        active = false;
-      };
-    }, []),
+      void reloadDashboardData().catch((error) => {
+        console.error("DHEBU: failed refreshing dashboard", error);
+      });
+    }, [reloadDashboardData]),
   );
 
-  function handleCloseReviewModal() {
+  async function handleCloseReviewModal() {
     setReviewModalVisible(false);
-    getPendingCount().then(setPendingCount); // refresh badge after reviewing
+
+    try {
+      await reloadDashboardData();
+    } catch (error) {
+      console.error("DHEBU: failed refreshing after pending review", error);
+    }
   }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.headerRow}>
-        <View>
+        <View style={styles.headerText}>
           <Text style={styles.greeting}>
             Hi{profile ? `, ${profile.name}` : ""} 👋
           </Text>
           <Text style={styles.subGreeting}>Here's your financial summary</Text>
         </View>
-        <Pressable
-          style={styles.avatar}
-          onPress={() => router.push("/(tabs)/profile")}
-        >
-          <Image
-            source={getAvatarSource(profile?.avatar_id)}
-            style={styles.avatarImage}
-            resizeMode="cover"
-          />
-        </Pressable>
+
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Refresh dashboard"
+            disabled={refreshing}
+            onPress={handleRefresh}
+            style={({ pressed }) => [
+              styles.refreshButton,
+              pressed && !refreshing && styles.refreshButtonPressed,
+              refreshing && styles.refreshButtonDisabled,
+            ]}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Text style={styles.refreshIcon}>↻</Text>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={styles.avatar}
+            onPress={() => router.push("/(tabs)/profile")}
+          >
+            <Image
+              source={getAvatarSource(profile?.avatar_id)}
+              style={styles.avatarImage}
+              resizeMode="cover"
+            />
+          </Pressable>
+        </View>
       </View>
 
       {pendingCount > 0 && (
@@ -193,6 +281,15 @@ export default function DashboardScreen() {
         data={recent}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.surface}
+            tintColor={colors.primary}
+          />
+        }
         renderItem={({ item }) => (
           <View style={styles.row}>
             <View
@@ -350,6 +447,37 @@ function createStyles(colors: ColorScheme, shadows: { soft: object }) {
       alignItems: "center",
       marginTop: Spacing.three,
       marginBottom: Spacing.four,
+    },
+    headerText: {
+      flex: 1,
+      paddingRight: Spacing.three,
+    },
+    headerActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.two,
+    },
+    refreshButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    refreshButtonPressed: {
+      opacity: 0.7,
+    },
+    refreshButtonDisabled: {
+      opacity: 0.65,
+    },
+    refreshIcon: {
+      fontFamily: Fonts.semiBold,
+      fontSize: 24,
+      lineHeight: 26,
+      color: colors.primary,
     },
     greeting: { fontFamily: Fonts.bold, fontSize: 20, color: colors.ink },
     subGreeting: {

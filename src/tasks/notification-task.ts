@@ -15,17 +15,21 @@ async function isApprovedSource(
   appLabel: string,
 ): Promise<boolean> {
   if (!packageName) {
-    console.log("DHEBU PIPELINE: empty package name");
+    if (__DEV__) {
+      console.log("DHEBU PIPELINE: empty package name");
+    }
 
     return false;
   }
 
   const db = await getDb();
 
-  console.log("DHEBU PIPELINE: checking source", {
-    packageName,
-    appLabel,
-  });
+  if (__DEV__) {
+    console.log("DHEBU PIPELINE: checking source", {
+      packageName,
+      appLabel,
+    });
+  }
 
   const existing = await db.getFirstAsync<{
     enabled: number;
@@ -41,7 +45,9 @@ async function isApprovedSource(
     [packageName],
   );
 
-  console.log("DHEBU PIPELINE: source database result", existing);
+  if (__DEV__) {
+    console.log("DHEBU PIPELINE: source database result", existing);
+  }
 
   if (existing) {
     if (
@@ -80,13 +86,15 @@ async function isApprovedSource(
     [packageName, appLabel || packageName],
   );
 
-  console.log(
-    "DHEBU PIPELINE: source missing from SQLite, registered disabled",
-    {
-      packageName,
-      appLabel,
-    },
-  );
+  if (__DEV__) {
+    console.log(
+      "DHEBU PIPELINE: source missing from SQLite, registered disabled",
+      {
+        packageName,
+        appLabel,
+      },
+    );
+  }
 
   return false;
 }
@@ -94,7 +102,9 @@ async function isApprovedSource(
 export async function handleNotificationEvent(
   event: RawNotificationEvent,
 ): Promise<boolean> {
-  console.log("DHEBU PIPELINE: handleNotificationEvent started", event);
+  if (__DEV__) {
+    console.log("DHEBU PIPELINE: handleNotificationEvent started", event);
+  }
 
   try {
     /*
@@ -104,7 +114,9 @@ export async function handleNotificationEvent(
      * so consider it handled.
      */
     if (!event.app || typeof event.app !== "string") {
-      console.log("DHEBU PIPELINE: invalid app package");
+      if (__DEV__) {
+        console.log("DHEBU PIPELINE: invalid app package");
+      }
 
       return true;
     }
@@ -117,17 +129,21 @@ export async function handleNotificationEvent(
       event.appLabel ?? event.app,
     );
 
-    console.log("DHEBU PIPELINE: source approved?", approved);
+    if (__DEV__) {
+      console.log("DHEBU PIPELINE: source approved?", approved);
+    }
 
     /*
      * If deliberately not approved, there is
      * no reason to keep retrying this notification.
      */
     if (!approved) {
-      console.log("DHEBU PIPELINE: ignored because source is not approved", {
-        app: event.app,
-        appLabel: event.appLabel,
-      });
+      if (__DEV__) {
+        console.log("DHEBU PIPELINE: ignored because source is not approved", {
+          app: event.app,
+          appLabel: event.appLabel,
+        });
+      }
 
       return true;
     }
@@ -137,7 +153,9 @@ export async function handleNotificationEvent(
      */
     const categories = await getAllCategories();
 
-    console.log("DHEBU PIPELINE: categories loaded", categories.length);
+    if (__DEV__) {
+      console.log("DHEBU PIPELINE: categories loaded", categories.length);
+    }
 
     /*
      * Parse notification.
@@ -148,13 +166,15 @@ export async function handleNotificationEvent(
       categories,
     );
 
-    console.log("DHEBU: parsed notification", {
-      app: event.app,
-      appLabel: event.appLabel,
-      title: event.title,
-      text: event.text,
-      parsed,
-    });
+    if (__DEV__) {
+      console.log("DHEBU: parsed notification", {
+        app: event.app,
+        appLabel: event.appLabel,
+        title: event.title,
+        text: event.text,
+        parsed,
+      });
+    }
 
     /*
      * No amount means it isn't a transaction.
@@ -163,7 +183,11 @@ export async function handleNotificationEvent(
      * so remove it from the native queue.
      */
     if (parsed.amount === null) {
-      console.log("DHEBU PIPELINE: no amount detected, ignoring notification");
+      if (__DEV__) {
+        console.log(
+          "DHEBU PIPELINE: no amount detected, ignoring notification",
+        );
+      }
 
       return true;
     }
@@ -187,14 +211,16 @@ export async function handleNotificationEvent(
       remarks: parsed.remarks,
     });
 
-    console.log("DHEBU: pending transaction created", {
-      result: created,
-      amount: parsed.amount,
-      type: parsed.type,
-      categoryId: parsed.categoryId,
-      remarks: parsed.remarks,
-      source: event.app,
-    });
+    if (__DEV__) {
+      console.log("DHEBU: pending transaction created", {
+        result: created,
+        amount: parsed.amount,
+        type: parsed.type,
+        categoryId: parsed.categoryId,
+        remarks: parsed.remarks,
+        source: event.app,
+      });
+    }
 
     /*
      * Everything completed successfully.

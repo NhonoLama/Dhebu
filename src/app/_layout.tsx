@@ -63,11 +63,13 @@ export default function RootLayout() {
     const previousTime = recentNotificationKeysRef.current.get(dedupeKey);
 
     if (previousTime !== undefined && now - previousTime < 1500) {
-      console.log("DHEBU: duplicate notification ignored", {
-        app: event.app,
-        title: event.title,
-        dedupeKey,
-      });
+      if (__DEV__) {
+        console.log("DHEBU: duplicate notification ignored", {
+          app: event.app,
+          title: event.title,
+          dedupeKey,
+        });
+      }
 
       if (event.queueId) {
         await removeQueuedNotification(event.queueId);
@@ -86,13 +88,15 @@ export default function RootLayout() {
 
     const bestText = event.bigText?.trim() || event.text?.trim() || "";
 
-    console.log("DHEBU: processing notification", {
-      queueId: event.queueId,
-      app: event.app,
-      appLabel: event.appLabel,
-      title: event.title,
-      text: bestText,
-    });
+    if (__DEV__) {
+      console.log("DHEBU: processing notification", {
+        queueId: event.queueId,
+        app: event.app,
+        appLabel: event.appLabel,
+        title: event.title,
+        text: bestText,
+      });
+    }
 
     const handled = await handleNotificationEvent({
       app: event.app,
@@ -104,16 +108,20 @@ export default function RootLayout() {
     if (handled && event.queueId) {
       const removed = await removeQueuedNotification(event.queueId);
 
-      console.log("DHEBU: native queue acknowledged", {
-        queueId: event.queueId,
-        removed,
-      });
+      if (__DEV__) {
+        console.log("DHEBU: native queue acknowledged", {
+          queueId: event.queueId,
+          removed,
+        });
+      }
     }
 
     if (!handled) {
-      console.log("DHEBU: notification kept in native queue for retry", {
-        queueId: event.queueId,
-      });
+      if (__DEV__) {
+        console.log("DHEBU: notification kept in native queue for retry", {
+          queueId: event.queueId,
+        });
+      }
     }
   }
 
@@ -121,9 +129,11 @@ export default function RootLayout() {
     try {
       const queued = await getQueuedNotifications();
 
-      console.log("DHEBU: draining native queue", {
-        count: queued.length,
-      });
+      if (__DEV__) {
+        console.log("DHEBU: draining native queue", {
+          count: queued.length,
+        });
+      }
 
       for (const event of queued) {
         await processNotification(event);
@@ -141,7 +151,9 @@ export default function RootLayout() {
    * - forwards unique notifications to the transaction detector
    */
   useEffect(() => {
-    console.log("DHEBU: registering notification listener");
+    if (__DEV__) {
+      console.log("DHEBU: registering notification listener");
+    }
 
     /*
      * Process notifications that Android may have
@@ -159,8 +171,9 @@ export default function RootLayout() {
     );
 
     return () => {
-      console.log("DHEBU: removing notification listener");
-
+      if (__DEV__) {
+        console.log("DHEBU: removing notification listener");
+      }
       subscription.remove();
     };
   }, []);
@@ -168,9 +181,11 @@ export default function RootLayout() {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
-        console.log(
-          "DHEBU: app became active, checking native notification queue",
-        );
+        if (__DEV__) {
+          console.log(
+            "DHEBU: app became active, checking native notification queue",
+          );
+        }
 
         void drainNativeNotificationQueue();
       }

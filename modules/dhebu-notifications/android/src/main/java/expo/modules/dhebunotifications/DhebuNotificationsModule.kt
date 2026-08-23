@@ -317,10 +317,12 @@ class DhebuNotificationsModule : Module() {
           )
           .apply()
 
-        Log.d(
-          DEDUPE_TAG,
-          "Duplicate notification rejected natively"
-        )
+        if (BuildConfig.DEBUG) {
+          Log.d(
+            DEDUPE_TAG,
+            "Duplicate notification rejected natively"
+          )
+        }
 
         return true
       }
@@ -343,10 +345,12 @@ class DhebuNotificationsModule : Module() {
         )
         .apply()
 
-      Log.d(
-        DEDUPE_TAG,
-        "New notification fingerprint recorded"
-      )
+      if (BuildConfig.DEBUG) {
+        Log.d(
+          DEDUPE_TAG,
+          "New notification fingerprint recorded"
+        )
+      }
 
       return false
     }
@@ -584,10 +588,12 @@ class DhebuNotificationsModule : Module() {
 
         } else {
 
-          Log.d(
-            BRIDGE_TAG,
-            "Notification queued natively: $queueId | $app"
-          )
+          if (BuildConfig.DEBUG) {
+            Log.d(
+              BRIDGE_TAG,
+              "Notification queued natively: $queueId | $app"
+            )
+          }
         }
 
         return EnqueueResult(
@@ -802,10 +808,12 @@ class DhebuNotificationsModule : Module() {
             saved
           ) {
 
-            Log.d(
-              BRIDGE_TAG,
-              "Removed notification from native queue: $queueId"
-            )
+            if (BuildConfig.DEBUG) {
+              Log.d(
+                BRIDGE_TAG,
+                "Removed notification from native queue: $queueId"
+              )
+            }
           }
 
           saved
@@ -855,18 +863,22 @@ class DhebuNotificationsModule : Module() {
          *
          * Notification already exists in native queue.
          */
-        Log.d(
-          BRIDGE_TAG,
-          "JS unavailable. Notification remains queued: $queueId"
-        )
+        if (BuildConfig.DEBUG) {
+          Log.d(
+            BRIDGE_TAG,
+            "JS unavailable. Notification remains queued: $queueId"
+          )
+        }
 
         return false
       }
 
-      Log.d(
-        BRIDGE_TAG,
-        "Sending queued notification to JavaScript: $queueId | $app"
-      )
+      if (BuildConfig.DEBUG) {
+        Log.d(
+          BRIDGE_TAG,
+          "Sending queued notification to JavaScript: $queueId | $app"
+        )
+      }
 
       instance.sendEvent(
         "onNotificationReceived",

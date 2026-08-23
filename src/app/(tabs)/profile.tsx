@@ -293,15 +293,17 @@ export default function ProfileScreen() {
 
       setAllowedPackages(nextPackages);
 
-      console.log(
-        currentlyAllowed
-          ? "DHEBU: notification app disabled"
-          : "DHEBU: notification app enabled",
-        {
-          appLabel: app.appLabel,
-          packageName: app.packageName,
-        },
-      );
+      if (__DEV__) {
+        console.log(
+          currentlyAllowed
+            ? "DHEBU: notification app disabled"
+            : "DHEBU: notification app enabled",
+          {
+            appLabel: app.appLabel,
+            packageName: app.packageName,
+          },
+        );
+      }
     } catch (error) {
       console.error("DHEBU: failed updating allowed notification app", error);
 

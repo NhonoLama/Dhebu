@@ -12,9 +12,8 @@ interface RawNotificationEvent {
 }
 
 /**
- * Prevent invalid notification titles such as
- * "https", "http", URLs, or empty values from
- * appearing as the transaction title.
+ * Prevent invalid titles such as "https", URLs, or empty values from being
+ * displayed as transaction titles.
  */
 function sanitizeNotificationTitle(
   title: string | undefined,
@@ -48,13 +47,6 @@ function sanitizeNotificationTitle(
   const cleanedAppLabel =
     typeof appLabel === "string" ? appLabel.replace(/\s+/g, " ").trim() : "";
 
-  /*
-   * Use the readable application name when available.
-   * For example: "Gmail transaction".
-   *
-   * Package names such as com.google.android.gm are
-   * intentionally rejected as user-facing titles.
-   */
   if (
     cleanedAppLabel &&
     !cleanedAppLabel.includes(".") &&
@@ -102,7 +94,10 @@ async function isApprovedSource(
   );
 
   if (__DEV__) {
-    console.log("DHEBU PIPELINE: source database result", existing);
+    console.log("DHEBU PIPELINE: source database result", {
+      found: Boolean(existing),
+      enabled: existing?.enabled === 1,
+    });
   }
 
   if (existing) {
@@ -125,10 +120,8 @@ async function isApprovedSource(
   }
 
   /*
-   * This should normally not happen now because
-   * Profile synchronizes selected apps into SQLite.
-   *
-   * Keep the fallback for safety.
+   * Profile normally synchronizes selected applications into SQLite. Keep a
+   * disabled fallback record if a previously unknown source reaches the task.
    */
   await db.runAsync(
     `
@@ -159,15 +152,19 @@ export async function handleNotificationEvent(
   event: RawNotificationEvent,
 ): Promise<boolean> {
   if (__DEV__) {
-    console.log("DHEBU PIPELINE: handleNotificationEvent started", event);
+    console.log("DHEBU PIPELINE: handleNotificationEvent started", {
+      app: event.app,
+      appLabel: event.appLabel,
+      postedAt: event.postedAt,
+      hasTitle: Boolean(event.title?.trim()),
+      textLength: event.text?.length ?? 0,
+    });
   }
 
   try {
     /*
-     * Invalid notification.
-     *
-     * There is nothing useful to retry,
-     * so consider it handled.
+     * Invalid notifications contain nothing useful to retry, so they are
+     * considered handled and can be removed from the native queue.
      */
     if (!event.app || typeof event.app !== "string") {
       if (__DEV__) {
@@ -177,10 +174,6 @@ export async function handleNotificationEvent(
       return true;
     }
 
-    /*
-     * Check whether this notification source
-     * has been enabled by the user.
-     */
     const approved = await isApprovedSource(
       event.app,
       event.appLabel ?? event.app,
@@ -190,13 +183,9 @@ export async function handleNotificationEvent(
       console.log("DHEBU PIPELINE: source approved?", approved);
     }
 
-    /*
-     * If deliberately not approved, there is
-     * no reason to keep retrying this notification.
-     */
     if (!approved) {
       if (__DEV__) {
-        console.log("DHEBU PIPELINE: ignored because source is not approved", {
+        console.log("DHEBU PIPELINE: source is not approved", {
           app: event.app,
           appLabel: event.appLabel,
         });
@@ -205,18 +194,12 @@ export async function handleNotificationEvent(
       return true;
     }
 
-    /*
-     * Load categories.
-     */
     const categories = await getAllCategories();
 
     if (__DEV__) {
       console.log("DHEBU PIPELINE: categories loaded", categories.length);
     }
 
-    /*
-     * Parse the notification content.
-     */
     const parsed = parseNotification(
       event.title ?? "",
       event.text ?? "",
@@ -224,23 +207,16 @@ export async function handleNotificationEvent(
     );
 
     if (__DEV__) {
-      console.log("DHEBU: parsed notification", {
+      console.log("DHEBU: notification parsed", {
         app: event.app,
-        appLabel: event.appLabel,
-        title: event.title,
-        text: event.text,
         postedAt: event.postedAt,
-        parsed,
+        amountDetected: parsed.amount !== null,
+        type: parsed.type,
+        categoryId: parsed.categoryId,
+        hasRemarks: Boolean(parsed.remarks?.trim()),
       });
     }
 
-    /*
-     * No amount means this notification is not
-     * treated as a financial transaction.
-     *
-     * It is still considered successfully processed,
-     * so it can be removed from the native queue.
-     */
     if (parsed.amount === null) {
       if (__DEV__) {
         console.log(
@@ -251,41 +227,23 @@ export async function handleNotificationEvent(
       return true;
     }
 
-    /*
-     * Clean the title before saving it.
-     *
-     * This prevents "https", URLs, or other link
-     * fragments from appearing in the review screen.
-     */
     const safeTitle = sanitizeNotificationTitle(event.title, event.appLabel);
 
     if (__DEV__) {
-      console.log("DHEBU: sanitized notification title", {
-        originalTitle: event.title,
-        safeTitle,
-        appLabel: event.appLabel,
-        source: event.app,
+      console.log("DHEBU: notification title sanitized", {
+        changed: safeTitle !== event.title,
+        usedAppFallback: safeTitle.endsWith(" transaction"),
       });
     }
 
-    /*
-     * Save the detected transaction for review.
-     */
     const created = await createPendingTransaction({
       raw_title: safeTitle,
-
       raw_text: event.text ?? "",
-
       source_package: event.app,
-
       detected_amount: parsed.amount,
-
       detected_type: parsed.type,
-
       detected_category_id: parsed.categoryId,
-
       remarks: parsed.remarks,
-
       notification_posted_at:
         typeof event.postedAt === "number" ? event.postedAt : null,
     });
@@ -293,30 +251,20 @@ export async function handleNotificationEvent(
     if (__DEV__) {
       console.log("DHEBU: pending transaction created", {
         result: created,
-        originalTitle: event.title,
-        savedTitle: safeTitle,
-        amount: parsed.amount,
         type: parsed.type,
         categoryId: parsed.categoryId,
-        remarks: parsed.remarks,
         source: event.app,
         postedAt: event.postedAt,
       });
     }
 
-    /*
-     * Everything completed successfully.
-     */
     return true;
   } catch (error) {
-    console.error("DHEBU PIPELINE ERROR:", error);
-
     /*
-     * Keep the native queued copy.
-     *
-     * It will be retried when Dhebu opens
-     * or resumes.
+     * Keep the native queued copy so it can be retried when Dhebu opens or
+     * resumes. Real failures remain visible in production logs.
      */
+    console.error("DHEBU PIPELINE ERROR:", error);
     return false;
   }
 }

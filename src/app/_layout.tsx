@@ -5,26 +5,21 @@ import {
   Poppins_700Bold,
 } from "@expo-google-fonts/poppins";
 
-import {
-  addNotificationListener,
-  getQueuedNotifications,
-  removeQueuedNotification,
-  type DhebuNotificationEvent,
-  type DhebuQueuedNotification,
-} from "@/modules/dhebu-notifications";
+import { addNotificationListener } from "@/modules/dhebu-notifications";
 
 import { useFonts } from "expo-font";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, View } from "react-native";
 
 import { Colors } from "@/constants/theme";
-
-import { handleNotificationEvent } from "@/tasks/notification-task";
-
 import { getUserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
+import {
+  drainNativeNotificationQueue,
+  processNativeNotification,
+} from "@/tasks/notification-queue";
 import { ThemeProvider } from "@/theme/theme-context";
 import { currentMonthRange } from "@/utils/date";
 
@@ -36,166 +31,12 @@ export default function RootLayout() {
   const init = useLedgerStore((s) => s.init);
   const refresh = useLedgerStore((s) => s.refresh);
 
-  const recentNotificationKeysRef = useRef<Map<string, number>>(new Map());
-
   const [fontsLoaded] = useFonts({
     Poppins_400Regular,
     Poppins_500Medium,
     Poppins_600SemiBold,
     Poppins_700Bold,
   });
-
-  async function processNotification(
-    event: DhebuNotificationEvent | DhebuQueuedNotification,
-  ) {
-    const now = Date.now();
-
-    const dedupeKey = [
-      event.app,
-      event.title,
-      event.text,
-      event.bigText,
-      event.subText,
-    ]
-      .map((value) => value?.trim().toLowerCase() ?? "")
-      .join("|");
-
-    const previousTime = recentNotificationKeysRef.current.get(dedupeKey);
-
-    if (previousTime !== undefined && now - previousTime < 1500) {
-      if (__DEV__) {
-        console.log("DHEBU: duplicate notification ignored", {
-          app: event.app,
-          title: event.title,
-          dedupeKey,
-        });
-      }
-
-      if (event.queueId) {
-        await removeQueuedNotification(event.queueId);
-      }
-
-      return;
-    }
-
-    recentNotificationKeysRef.current.set(dedupeKey, now);
-
-    for (const [key, timestamp] of recentNotificationKeysRef.current) {
-      if (now - timestamp > 30000) {
-        recentNotificationKeysRef.current.delete(key);
-      }
-    }
-
-    const bestText = event.bigText?.trim() || event.text?.trim() || "";
-
-    if (__DEV__) {
-      console.log("DHEBU: processing notification", {
-        queueId: event.queueId,
-        app: event.app,
-        appLabel: event.appLabel,
-        title: event.title,
-        text: bestText,
-      });
-    }
-
-    const handled = await handleNotificationEvent({
-      app: event.app,
-      appLabel: event.appLabel,
-      title: event.title ?? "",
-      text: bestText,
-      postedAt: event.postedAt,
-    });
-
-    if (handled && event.queueId) {
-      const removed = await removeQueuedNotification(event.queueId);
-
-      if (__DEV__) {
-        console.log("DHEBU: native queue acknowledged", {
-          queueId: event.queueId,
-          removed,
-        });
-      }
-    }
-
-    if (!handled) {
-      if (__DEV__) {
-        console.log("DHEBU: notification kept in native queue for retry", {
-          queueId: event.queueId,
-        });
-      }
-    }
-  }
-
-  async function drainNativeNotificationQueue() {
-    try {
-      const queued = await getQueuedNotifications();
-
-      if (__DEV__) {
-        console.log("DHEBU: draining native queue", {
-          count: queued.length,
-        });
-      }
-
-      for (const event of queued) {
-        await processNotification(event);
-      }
-    } catch (error) {
-      console.error("DHEBU: failed draining native notification queue", error);
-    }
-  }
-
-  /*
-   * Native Android notification pipeline.
-   *
-   * - receives notifications from Kotlin
-   * - removes duplicate Android callbacks
-   * - forwards unique notifications to the transaction detector
-   */
-  useEffect(() => {
-    if (__DEV__) {
-      console.log("DHEBU: registering notification listener");
-    }
-
-    /*
-     * Process notifications that Android may have
-     * saved before the JavaScript runtime became ready.
-     */
-    void drainNativeNotificationQueue();
-
-    /*
-     * Receive new live notifications while JS is active.
-     */
-    const subscription = addNotificationListener(
-      (event: DhebuNotificationEvent) => {
-        void processNotification(event);
-      },
-    );
-
-    return () => {
-      if (__DEV__) {
-        console.log("DHEBU: removing notification listener");
-      }
-      subscription.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        if (__DEV__) {
-          console.log(
-            "DHEBU: app became active, checking native notification queue",
-          );
-        }
-
-        void drainNativeNotificationQueue();
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   /*
    * Initialize database + application data.
@@ -221,8 +62,78 @@ export default function RootLayout() {
   }, [init, refresh]);
 
   /*
-   * Hide splash screen once both
-   * DB and fonts are ready.
+   * Centralized native Android notification pipeline.
+   *
+   * Startup queue recovery, live notifications, app resume,
+   * and Home manual refresh all use the same processor from
+   * notification-queue.ts.
+   *
+   * This effect waits for SQLite initialization before
+   * processing notifications.
+   */
+  useEffect(() => {
+    if (!dbReady) {
+      return;
+    }
+
+    if (__DEV__) {
+      console.log("DHEBU: registering centralized notification listener");
+    }
+
+    /*
+     * Receive new live notifications while
+     * JavaScript is active.
+     */
+    const notificationSubscription = addNotificationListener((event) => {
+      void processNativeNotification(event).catch((error) => {
+        console.error("DHEBU: live notification processing failed", error);
+      });
+    });
+
+    /*
+     * Recover native notifications that arrived before
+     * JavaScript and SQLite became ready.
+     */
+    void drainNativeNotificationQueue().catch((error) => {
+      console.error("DHEBU: startup native queue drain failed", error);
+    });
+
+    /*
+     * Check the persistent native queue whenever
+     * the app returns to the foreground.
+     */
+    const appStateSubscription = AppState.addEventListener(
+      "change",
+      (state) => {
+        if (state !== "active") {
+          return;
+        }
+
+        if (__DEV__) {
+          console.log(
+            "DHEBU: app became active, checking native notification queue",
+          );
+        }
+
+        void drainNativeNotificationQueue().catch((error) => {
+          console.error("DHEBU: resume native queue drain failed", error);
+        });
+      },
+    );
+
+    return () => {
+      if (__DEV__) {
+        console.log("DHEBU: removing centralized notification listener");
+      }
+
+      notificationSubscription.remove();
+      appStateSubscription.remove();
+    };
+  }, [dbReady]);
+
+  /*
+   * Hide splash screen once both the
+   * database and fonts are ready.
    */
   useEffect(() => {
     if (dbReady && fontsLoaded) {
@@ -253,7 +164,6 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" />
-
         <Stack.Screen name="onboarding" />
       </Stack>
     </ThemeProvider>

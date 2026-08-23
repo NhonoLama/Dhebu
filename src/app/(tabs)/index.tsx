@@ -17,10 +17,6 @@ import { getAvatarSource } from "@/constants/avatars";
 import { PendingReviewModal } from "@/components/pending-review-modal";
 import { ColorScheme, Fonts, Radii, Spacing } from "@/constants/theme";
 import type { CategoryBreakdown, PeriodSummary } from "@/db/types";
-import {
-  getQueuedNotifications,
-  removeQueuedNotification,
-} from "@/modules/dhebu-notifications";
 import { getPendingCount } from "@/repositories/pending-transactions.repo";
 import {
   getCategoryBreakdown,
@@ -28,7 +24,7 @@ import {
 } from "@/repositories/transactions.repo";
 import { getUserProfile, UserProfile } from "@/repositories/user-profile.repo";
 import { useLedgerStore } from "@/stores/useLedgerStore";
-import { handleNotificationEvent } from "@/tasks/notification-task";
+import { drainNativeNotificationQueue } from "@/tasks/notification-queue";
 import { useTheme } from "@/theme/theme-context";
 import { formatCurrency } from "@/utils/currency";
 import {
@@ -36,39 +32,6 @@ import {
   currentYearRange,
   formatDisplayDate,
 } from "@/utils/date";
-
-async function drainNativeNotificationQueue(): Promise<void> {
-  const queuedNotifications = await getQueuedNotifications();
-
-  if (__DEV__) {
-    console.log("DHEBU: manual refresh draining native queue", {
-      count: queuedNotifications.length,
-    });
-  }
-
-  for (const event of queuedNotifications) {
-    const handled = await handleNotificationEvent({
-      app: event.app,
-      appLabel: event.appLabel,
-      title: event.title ?? "",
-      text: event.bigText?.trim() || event.text?.trim() || "",
-      postedAt: typeof event.postedAt === "number" ? event.postedAt : undefined,
-    });
-
-    if (!handled || !event.queueId) {
-      continue;
-    }
-
-    const removed = await removeQueuedNotification(event.queueId);
-
-    if (__DEV__) {
-      console.log("DHEBU: manual refresh acknowledged native queue item", {
-        queueId: event.queueId,
-        removed,
-      });
-    }
-  }
-}
 
 export default function DashboardScreen() {
   const { colors, shadows } = useTheme();

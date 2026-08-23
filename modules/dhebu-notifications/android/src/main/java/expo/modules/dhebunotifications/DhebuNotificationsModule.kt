@@ -979,8 +979,8 @@ class DhebuNotificationsModule : Module() {
 
         val componentName =
           ComponentName(
-            "com.anonymous.Dhebu",
-            "com.anonymous.Dhebu.notifications.DhebuNotificationListenerService"
+            "com.dawa.dhebu",
+            "com.dawa.dhebu.notifications.DhebuNotificationListenerService"
           )
 
         if (

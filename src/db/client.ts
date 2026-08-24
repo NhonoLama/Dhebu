@@ -11,9 +11,15 @@ let initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
  */
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (dbInstance) return Promise.resolve(dbInstance);
+
   if (!initPromise) {
-    initPromise = initDb();
+    initPromise = initDb().catch((error) => {
+      dbInstance = null;
+      initPromise = null;
+      throw error;
+    });
   }
+
   return initPromise;
 }
 
@@ -25,6 +31,18 @@ async function initDb(): Promise<SQLite.SQLiteDatabase> {
   await seedDefaults(db);
   dbInstance = db;
   return db;
+}
+
+async function columnExists(
+  db: SQLite.SQLiteDatabase,
+  tableName: string,
+  columnName: string,
+): Promise<boolean> {
+  const columns = await db.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(${tableName});`,
+  );
+
+  return columns.some((column) => column.name === columnName);
 }
 
 const CURRENT_VERSION = 8;
@@ -107,9 +125,14 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
   }
 
   if (version < 4) {
-    await db.execAsync(`
-      ALTER TABLE leave_days ADD COLUMN amount REAL NOT NULL DEFAULT 1;
+    const hasAmount = await columnExists(db, "leave_days", "amount");
+
+    if (!hasAmount) {
+      await db.execAsync(`
+      ALTER TABLE leave_days
+      ADD COLUMN amount REAL NOT NULL DEFAULT 1;
     `);
+    }
   }
 
   if (version < 5) {
@@ -151,17 +174,29 @@ async function runMigrations(db: SQLite.SQLiteDatabase) {
   }
 
   if (version < 7) {
-    await db.execAsync(`
-    ALTER TABLE user_profile
-    ADD COLUMN avatar_id TEXT NOT NULL DEFAULT 'avatar_01';
-  `);
+    const hasAvatarId = await columnExists(db, "user_profile", "avatar_id");
+
+    if (!hasAvatarId) {
+      await db.execAsync(`
+      ALTER TABLE user_profile
+      ADD COLUMN avatar_id TEXT NOT NULL DEFAULT 'avatar_01';
+    `);
+    }
   }
 
   if (version < 8) {
-    await db.execAsync(`
-    ALTER TABLE pending_transactions
-    ADD COLUMN notification_posted_at INTEGER;
-  `);
+    const hasNotificationPostedAt = await columnExists(
+      db,
+      "pending_transactions",
+      "notification_posted_at",
+    );
+
+    if (!hasNotificationPostedAt) {
+      await db.execAsync(`
+      ALTER TABLE pending_transactions
+      ADD COLUMN notification_posted_at INTEGER;
+    `);
+    }
   }
 
   // Future migrations: `if (version < 9) { ... }` etc.

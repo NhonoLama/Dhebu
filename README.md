@@ -1,25 +1,66 @@
 # Dhebu
 
-Dhebu is an Android-first personal finance application built with React Native and Expo. It helps users record income and expenses, organize transactions, review activity by date, and detect supported transaction notifications from selected Android apps.
+**A personal finance app that helps you track transactions before you forget them.**
+
+Most personal finance apps depend on manual entry. During a busy day, it is easy to make payments, receive money, and forget to record every transaction. Missing even a few entries can leave users with an incomplete financial history and no clear record of where their money went.
+
+Dhebu is designed to solve that problem. It automatically detects supported transaction notifications from the Android apps selected by the user and turns them into pending transactions for review. The user can verify the amount, transaction type, category, source, date, and notes before confirming each entry. This reduces forgotten entries while keeping every transaction organized and traceable.
+
+Users can also add transactions manually, manage accounts and categories, review monthly activity, and keep personal financial records in one place. Beyond finance, Dhebu includes a calendar for future notes and reminders, plus leave tracking so users can record leave days and see how many days remain.
 
 > **Project status:** V1 release candidate. The main V1 feature set is implemented; final production regression testing and release validation are in progress.
 
-## Features
+## Two main real-life solutions
 
-- Personal onboarding with name, currency, and avatar selection
+### 1. Track daily transactions before they are forgotten
+
+People often make several payments or receive money throughout the day but forget to enter every transaction manually. Dhebu detects supported transaction notifications from selected Android apps and prepares them as pending transactions. The user reviews the details before confirming them, creating a more complete and traceable financial history without relying only on memory.
+
+### 2. Remember future tasks and track remaining leave
+
+Important payments, appointments, deadlines, and personal tasks are also easy to forget. Dhebu lets users add calendar notes and schedule reminders for future dates and times. Its leave tracker records leave taken and shows the remaining leave balance, removing the need to calculate or remember it separately.
+
+## App features
+
+### Finance and transactions
+
 - Dashboard with income, expense, and balance summaries
 - Manual income and expense entry
-- Custom accounts and categories
-- Transaction history with monthly grouping
-- Calendar notes, reminders, and leave-day tracking
-- Local user profile and appearance settings
+- Automatic detection of supported transaction notifications
+- Pending transaction review before confirmation
+- Confirm or dismiss detected transactions
+- Custom accounts and income or expense categories
+- Monthly transaction history
+- Transaction details including amount, type, category, source, date, and notes
+
+### Calendar and leave management
+
+- Notes attached to specific calendar dates
+- Scheduled reminders for future dates and times
+- Leave allowance configuration
+- Leave records for selected dates
+- Used and remaining leave tracking
+
+### Personalization and interface
+
+- Personal onboarding with name, currency, and avatar selection
+- Local user profile settings
 - System, light, and dark themes
+- Dashboard, calendar, add transaction, history, and profile navigation
+
+### Notification processing
+
 - Android notification-access status monitoring
 - Selection of approved transaction-notification apps
-- Automatic detection of supported transaction notifications
-- Review, confirm, or dismiss detected pending transactions
-- Native persistent notification queue for delivery when JavaScript is unavailable
-- Local SQLite storage with versioned, data-preserving migrations
+- Native filtering of notifications from unselected apps
+- Persistent native notification queue when JavaScript is unavailable
+- Duplicate-notification protection
+
+### Local data
+
+- Local SQLite storage
+- Versioned, data-preserving database migrations
+- On-device transaction and preference storage
 
 ## Technology
 
@@ -161,4 +202,3 @@ The app uses notification content solely to identify possible financial transact
 ## Repository
 
 [github.com/NhonoLama/Dhebu](https://github.com/NhonoLama/Dhebu)
-
